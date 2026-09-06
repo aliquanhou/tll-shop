@@ -58,16 +58,16 @@ fn _statusBadge(status) {
     return "<span class='status-badge'>" + status + "</span>"
 }
 
-fn _barChart(data, maxVal, labelField, valueField) {
+fn _salesBarChart(data, maxVal) {
     let html = "<div class='bar-chart'>"
     let i = 0
     while (i < arrays.length(data)) {
         let item = data[i]
         let pct = 10
-        if (maxVal > 0) { pct = (item[valueField] / maxVal) * 90 }
+        if (maxVal > 0) { pct = (item.sales / maxVal) * 90 }
         if (pct < 4) { pct = 4 }
         let heightStr = convert.toString(pct) + "%"
-        html = html + "<div class='bar-item'><div class='bar' style='height:" + heightStr + "'><span class='bar-val'>¥" + convert.toString(item[valueField]) + "</span></div><div class='bar-lbl'>" + item[labelField] + "</div></div>"
+        html = html + "<div class='bar-item'><div class='bar' style='height:" + heightStr + "'><span class='bar-val'>¥" + convert.toString(item.sales) + "</span></div><div class='bar-lbl'>" + item.date + "</div></div>"
         i = i + 1
     }
     html = html + "</div>"
@@ -103,7 +103,7 @@ fn admin_dashboardPage(req) {
         if (salesTrend[ti].sales > maxSales) { maxSales = salesTrend[ti].sales }
         ti = ti + 1
     }
-    let salesChart = _barChart(salesTrend, maxSales, "date", "sales")
+    let salesChart = _salesBarChart(salesTrend, maxSales)
     let salesHtml = "<div class='chart-container'><div class='chart-title'>近7天销售趋势</div>" + salesChart + "</div>"
 
     // Order distribution
