@@ -156,7 +156,9 @@ fn points_approve(db, applicationId, operatorId, remark) {
     // 事务：更新申请状态 + 增加积分
     db_begin(db)
     db_exec(db, "UPDATE point_applications SET status = 'approved', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [operatorId, applicationId])
-    let result = points_addInternal(db, app.user_id, app.amount, "application", applicationId, "申请积分批准" + (remark != null ? "：" + remark : ""), operatorId)
+    let remarkSuffix = ""
+    if (remark != null) { remarkSuffix = "：" + remark }
+    let result = points_addInternal(db, app.user_id, app.amount, "application", applicationId, "申请积分批准" + remarkSuffix, operatorId)
     if (result.error != null) {
         db_rollback(db)
         return result
