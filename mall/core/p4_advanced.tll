@@ -69,7 +69,7 @@ fn p4_registerMemberRoutes(router, db) {
         let level = convert.toString(data.level)
         let discount = convert.toString(data.discount)
         let minPoints = convert.toString(data.min_points)
-        db_exec(req.db, "INSERT INTO member_levels (name, level, discount, min_points, created_at) VALUES ('" + name + "', " + level + ", " + discount + ", " + minPoints + ", datetime('now'))")
+        db_exec(req.db, "INSERT INTO member_levels (name, level, discount, min_points, created_at) VALUES (?, ?, ?, ?, datetime('now'))", [name, level, discount, minPoints])
         return res_redirect("/admin/member/levels")
     })
 
@@ -117,10 +117,10 @@ fn p4_registerMemberRoutes(router, db) {
         let authResult = p4_checkUser(req)
         if (authResult != null) { return authResult }
         let userId = req.currentUser.id
-        let totalEarn = db_queryOne(req.db, "SELECT COALESCE(SUM(points),0) as total FROM point_logs WHERE user_id=" + convert.toString(userId) + " AND type='earn'")
-        let totalSpend = db_queryOne(req.db, "SELECT COALESCE(SUM(points),0) as total FROM point_logs WHERE user_id=" + convert.toString(userId) + " AND type='spend'")
+        let totalEarn = db_queryOne(req.db, "SELECT COALESCE(SUM(points),0) as total FROM point_logs WHERE user_id = ? AND type='earn'", [userId])
+        let totalSpend = db_queryOne(req.db, "SELECT COALESCE(SUM(points),0) as total FROM point_logs WHERE user_id = ? AND type='spend'", [userId])
         let balance = totalEarn.total - totalSpend.total
-        let logs = db_query(req.db, "SELECT * FROM point_logs WHERE user_id=" + convert.toString(userId) + " ORDER BY id DESC LIMIT 20")
+        let logs = db_query(req.db, "SELECT * FROM point_logs WHERE user_id = ? ORDER BY id DESC LIMIT 20", [userId])
         let logHtml = ""
         let i = 0
         while (i < arrays.length(logs)) {
@@ -137,10 +137,10 @@ fn p4_registerMemberRoutes(router, db) {
         let authResult = p4_checkUser(req)
         if (authResult != null) { return authResult }
         let userId = req.currentUser.id
-        let user = db_queryOne(req.db, "SELECT balance FROM users WHERE id=" + convert.toString(userId))
+        let user = db_queryOne(req.db, "SELECT balance FROM users WHERE id = ?", [userId])
         let balance = 0
         if (user != null && user.balance != null) { balance = user.balance }
-        let logs = db_query(req.db, "SELECT * FROM account_logs WHERE user_id=" + convert.toString(userId) + " ORDER BY id DESC LIMIT 20")
+        let logs = db_query(req.db, "SELECT * FROM account_logs WHERE user_id = ? ORDER BY id DESC LIMIT 20", [userId])
         let logHtml = ""
         let i = 0
         while (i < arrays.length(logs)) {
@@ -160,12 +160,12 @@ fn p4_registerMemberRoutes(router, db) {
         let userId = req.currentUser.id
         let data = json.parse(req.body)
         let amount = convert.toString(data.amount)
-        let user = db_queryOne(req.db, "SELECT balance FROM users WHERE id=" + convert.toString(userId))
+        let user = db_queryOne(req.db, "SELECT balance FROM users WHERE id = ?", [userId])
         let oldBalance = 0
         if (user != null && user.balance != null) { oldBalance = user.balance }
         let newBalance = oldBalance + convert.toFloat(amount)
-        db_exec(req.db, "UPDATE users SET balance=" + convert.toString(newBalance) + " WHERE id=" + convert.toString(userId))
-        db_exec(req.db, "INSERT INTO account_logs (user_id, type, amount, balance_before, balance_after, description, created_at) VALUES (" + convert.toString(userId) + ", 'income', " + amount + ", " + convert.toString(oldBalance) + ", " + convert.toString(newBalance) + ", 'Account recharge', datetime('now'))")
+        db_exec(req.db, "UPDATE users SET balance = ? WHERE id = ?", [newBalance, userId])
+        db_exec(req.db, "INSERT INTO account_logs (user_id, type, amount, balance_before, balance_after, description, created_at) VALUES (?, 'income', ?, ?, ?, 'Account recharge', datetime('now'))", [userId, amount, oldBalance, newBalance])
         return res_redirect("/my/balance")
     })
 }
@@ -195,7 +195,7 @@ fn p4_registerContentRoutes(router, db) {
         let data = json.parse(req.body)
         let word = p4_esc(data.word)
         let category = data.category
-        db_exec(req.db, "INSERT INTO sensitive_words (word, category, status, created_at) VALUES ('" + word + "', '" + category + "', 'active', datetime('now'))")
+        db_exec(req.db, "INSERT INTO sensitive_words (word, category, status, created_at) VALUES (?, ?, 'active', datetime('now'))", [word, category])
         return res_redirect("/admin/sensitive")
     })
 
@@ -203,7 +203,7 @@ fn p4_registerContentRoutes(router, db) {
         let authResult = p4_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "DELETE FROM sensitive_words WHERE id=" + convert.toString(id))
+        db_exec(req.db, "DELETE FROM sensitive_words WHERE id = ?", [id])
         return res_redirect("/admin/sensitive")
     })
 
@@ -235,9 +235,9 @@ fn p4_registerContentRoutes(router, db) {
     // Article detail
     router_get(router, "/article/:id", fn(req) {
         let id = convert.toInt(req.params.id)
-        let article = db_queryOne(req.db, "SELECT * FROM articles WHERE id=" + convert.toString(id))
+        let article = db_queryOne(req.db, "SELECT * FROM articles WHERE id = ?", [id])
         if (article == null) { return res_notFound("Article not found") }
-        db_exec(req.db, "UPDATE articles SET view_count=view_count+1 WHERE id=" + convert.toString(id))
+        db_exec(req.db, "UPDATE articles SET view_count = view_count + 1 WHERE id = ?", [id])
         let aContent = ""
         if (article.content != null) { aContent = article.content }
         let body = "<h1>" + article.title + "</h1><div class='card'><p style='color:#999;font-size:12px'>" + article.created_at + " | Views: " + convert.toString(article.view_count) + "</p><hr><div>" + aContent + "</div></div><a href='/articles' class='btn'>Back to Articles</a>"
@@ -266,7 +266,7 @@ fn p4_registerContentRoutes(router, db) {
         let title = p4_esc(data.title)
         let content = p4_esc(data.content)
         let category = data.category
-        db_exec(req.db, "INSERT INTO articles (title, content, category, status, created_at) VALUES ('" + title + "', '" + content + "', '" + category + "', 'published', datetime('now'))")
+        db_exec(req.db, "INSERT INTO articles (title, content, category, status, created_at) VALUES (?, ?, ?, 'published', datetime('now'))", [title, content, category])
         return res_redirect("/admin/articles")
     })
 
@@ -274,7 +274,7 @@ fn p4_registerContentRoutes(router, db) {
         let authResult = p4_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "DELETE FROM articles WHERE id=" + convert.toString(id))
+        db_exec(req.db, "DELETE FROM articles WHERE id = ?", [id])
         return res_redirect("/admin/articles")
     })
 
@@ -301,7 +301,7 @@ fn p4_registerContentRoutes(router, db) {
         let title = p4_esc(data.title)
         let content = p4_esc(data.content)
         let annType = data.type
-        db_exec(req.db, "INSERT INTO announcements (title, content, type, status, created_at) VALUES ('" + title + "', '" + content + "', '" + annType + "', 'active', datetime('now'))")
+        db_exec(req.db, "INSERT INTO announcements (title, content, type, status, created_at) VALUES (?, ?, ?, 'active', datetime('now'))", [title, content, annType])
         return res_redirect("/admin/announcements")
     })
 
@@ -309,7 +309,7 @@ fn p4_registerContentRoutes(router, db) {
         let authResult = p4_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "DELETE FROM announcements WHERE id=" + convert.toString(id))
+        db_exec(req.db, "DELETE FROM announcements WHERE id = ?", [id])
         return res_redirect("/admin/announcements")
     })
 }
@@ -351,7 +351,7 @@ fn p4_registerSystemRoutes(router, db) {
         let data = json.parse(req.body)
         let name = p4_esc(data.name)
         let code = p4_esc(data.code)
-        db_exec(req.db, "INSERT INTO logistics (name, code, status, created_at) VALUES ('" + name + "', '" + code + "', 'active', datetime('now'))")
+        db_exec(req.db, "INSERT INTO logistics (name, code, status, created_at) VALUES (?, ?, 'active', datetime('now'))", [name, code])
         return res_redirect("/admin/system/config")
     })
 
