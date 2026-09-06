@@ -1,0 +1,156 @@
+// TLL Shop - Points System Routes
+// 积分系统前端页面 + 后台管理 + API
+
+from "./database" import db_get, db_release
+from "./router" import router_get, router_post, res_json, res_html, res_redirect, req_getJsonBody
+from "./session" import session_cookieHeader
+from "./auth" import auth_currentUser, auth_isAdmin, cookie_getSessionId
+from "./points" import points_getWallet, points_apply, points_approve, points_reject, points_listApplications, points_getLedger, points_adminAdjust, points_getStats
+
+fn points_registerRoutes(router, html_page, html_header) {
+    // --- User Points Center ---
+    router_get(router, "/user/points", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let currentUser = auth_currentUser(sessionId)
+        if (currentUser == null) { return res_redirect("/login?redirect=/user/points") }
+        let wallet = points_getWallet(req.db, currentUser.id)
+        let applications = points_listApplications(req.db, currentUser.id, null, 10, 0)
+        let ledger = points_getLedger(req.db, currentUser.id, 20, 0)
+        let appHtml = ""
+        if (arrays.length(applications) == 0) {
+            appHtml = "<tr><td colspan='4' style='text-align:center;color:#999'>暂无申请记录</td></tr>"
+        } else {
+            let i = 0
+            while (i < arrays.length(applications)) {
+                let a = applications[i]
+                let statusBadge = "<span class='badge badge-warning'>待审核</span>"
+                if (a.status == "approved") { statusBadge = "<span class='badge badge-success'>已批准</span>" }
+                if (a.status == "rejected") { statusBadge = "<span class='badge badge-danger'>已拒绝</span>" }
+                appHtml = appHtml + "<tr><td>" + convert.toString(a.id) + "</td><td>" + convert.toString(a.amount) + "</td><td>" + statusBadge + "</td><td>" + a.created_at + "</td></tr>"
+                i = i + 1
+            }
+        }
+        let ledgerHtml = ""
+        if (arrays.length(ledger) == 0) {
+            ledgerHtml = "<tr><td colspan='5' style='text-align:center;color:#999'>暂无积分流水</td></tr>"
+        } else {
+            let i = 0
+            while (i < arrays.length(ledger)) {
+                let l = ledger[i]
+                let typeBadge = "<span class='badge badge-success'>+</span>"
+                if (l.type == "spend") { typeBadge = "<span class='badge badge-danger'>-</span>" }
+                if (l.type == "refund") { typeBadge = "<span class='badge badge-warning'>退</span>" }
+                ledgerHtml = ledgerHtml + "<tr><td>" + typeBadge + " " + l.type + "</td><td>" + convert.toString(l.amount) + "</td><td>" + convert.toString(l.balance_after) + "</td><td>" + l.description + "</td><td>" + l.created_at + "</td></tr>"
+                i = i + 1
+            }
+        }
+        let body = html_header(currentUser) +
+            "<div class='container'>" +
+            "<div class='breadcrumb'><a href='/'>首页</a> / <a href='/user'>用户中心</a> / 我的积分</div>" +
+            "<div class='card' style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center'>" +
+            "<div><h3>当前余额</h3><div style='font-size:36px;color:#ff4400;font-weight:bold'>" + convert.toString(wallet.balance) + "</div><p style='color:#999'>积分</p></div>" +
+            "<div><h3>累计获得</h3><div style='font-size:36px;color:#2e7d32;font-weight:bold'>" + convert.toString(wallet.total_earned) + "</div><p style='color:#999'>积分</p></div>" +
+            "<div><h3>累计消费</h3><div style='font-size:36px;color:#c62828;font-weight:bold'>" + convert.toString(wallet.total_spent) + "</div><p style='color:#999'>积分</p></div>" +
+            "</div>" +
+            "<div class='card'><h3>申请积分</h3>" +
+            "<form id='applyForm' style='display:flex;gap:10px;align-items:flex-end'>" +
+            "<div class='form-group' style='flex:1'><label>申请积分数量</label><input type='number' id='applyAmount' placeholder='请输入申请积分数量' min='1'></div>" +
+            "<div class='form-group' style='flex:2'><label>申请理由</label><input type='text' id='applyReason' placeholder='请输入申请理由'></div>" +
+            "<button type='button' class='btn' onclick='submitApply()'>提交申请</button>" +
+            "</form></div>" +
+            "<div class='card'><h3>申请记录</h3><table class='table'><thead><tr><th>ID</th><th>数量</th><th>状态</th><th>申请时间</th></tr></thead><tbody>" + appHtml + "</tbody></table></div>" +
+            "<div class='card'><h3>积分流水</h3><table class='table'><thead><tr><th>类型</th><th>变动</th><th>余额</th><th>说明</th><th>时间</th></tr></thead><tbody>" + ledgerHtml + "</tbody></table></div>" +
+            "</div>" +
+            "<script>function submitApply(){let amount=parseInt(document.getElementById('applyAmount').value);let reason=document.getElementById('applyReason').value;" +
+            "if(!amount||amount<=0){alert('请输入有效的积分数量');return;}" +
+            "fetch('/api/points/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amount,reason:reason})}).then(r=>r.json()).then(d=>{if(d.success){alert('申请提交成功，等待审核');location.reload();}else{alert(d.error);}});}</script>"
+        return res_html(html_page("我的积分", body))
+    })
+
+    // --- API: Apply Points ---
+    router_post(router, "/api/points/apply", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let currentUser = auth_currentUser(sessionId)
+        if (currentUser == null) { return res_json({error: "请先登录"}, 401) }
+        let body = req_getJsonBody(req)
+        let result = points_apply(req.db, currentUser.id, body.amount, body.reason)
+        return res_json(result)
+    })
+
+    // --- Admin: Points Management ---
+    router_get(router, "/admin/points", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        if (!auth_isAdmin(sessionId)) { return res_redirect("/admin/login") }
+        let stats = points_getStats(req.db)
+        let pendingApps = points_listApplications(req.db, null, "pending", 50, 0)
+        let appHtml = ""
+        if (arrays.length(pendingApps) == 0) {
+            appHtml = "<tr><td colspan='6' style='text-align:center;color:#999'>暂无待审核申请</td></tr>"
+        } else {
+            let i = 0
+            while (i < arrays.length(pendingApps)) {
+                let a = pendingApps[i]
+                appHtml = appHtml + "<tr><td>" + convert.toString(a.id) + "</td><td>" + convert.toString(a.user_id) + "</td><td>" + convert.toString(a.amount) + "</td><td>" + a.reason + "</td><td>" + a.created_at + "</td>" +
+                    "<td><button class='btn' style='padding:4px 12px;font-size:12px' onclick='approveApp(" + convert.toString(a.id) + ")'>批准</button> " +
+                    "<button class='btn btn-outline' style='padding:4px 12px;font-size:12px' onclick='rejectApp(" + convert.toString(a.id) + ")'>拒绝</button></td></tr>"
+                i = i + 1
+            }
+        }
+        let body = "<div class='container'>" +
+            "<h2 style='margin:20px 0'>积分系统管理</h2>" +
+            "<div class='card' style='display:grid;grid-template-columns:repeat(5,1fr);gap:20px;text-align:center'>" +
+            "<div><h4>用户数</h4><div style='font-size:28px;font-weight:bold'>" + convert.toString(stats.total_users) + "</div></div>" +
+            "<div><h4>总余额</h4><div style='font-size:28px;font-weight:bold;color:#ff4400'>" + convert.toString(stats.total_balance) + "</div></div>" +
+            "<div><h4>总发放</h4><div style='font-size:28px;font-weight:bold;color:#2e7d32'>" + convert.toString(stats.total_earned) + "</div></div>" +
+            "<div><h4>总消费</h4><div style='font-size:28px;font-weight:bold;color:#c62828'>" + convert.toString(stats.total_spent) + "</div></div>" +
+            "<div><h4>待审核</h4><div style='font-size:28px;font-weight:bold;color:#e65100'>" + convert.toString(stats.pending_applications) + "</div></div>" +
+            "</div>" +
+            "<div class='card'><h3>待审核申请</h3><table class='table'><thead><tr><th>ID</th><th>用户ID</th><th>数量</th><th>理由</th><th>时间</th><th>操作</th></tr></thead><tbody>" + appHtml + "</tbody></table></div>" +
+            "<div class='card'><h3>手动调整积分</h3>" +
+            "<form id='adjustForm' style='display:flex;gap:10px;align-items:flex-end'>" +
+            "<div class='form-group'><label>用户ID</label><input type='number' id='adjustUserId' placeholder='用户ID'></div>" +
+            "<div class='form-group'><label>调整数量（正增负扣）</label><input type='number' id='adjustAmount' placeholder='如：100 或 -50'></div>" +
+            "<div class='form-group' style='flex:1'><label>说明</label><input type='text' id='adjustReason' placeholder='调整说明'></div>" +
+            "<button type='button' class='btn' onclick='submitAdjust()'>提交调整</button>" +
+            "</form></div>" +
+            "</div>" +
+            "<script>function approveApp(id){if(!confirm('确认批准该申请？'))return;fetch('/api/admin/points/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}).then(r=>r.json()).then(d=>{if(d.success){alert('批准成功');location.reload();}else{alert(d.error);}});}" +
+            "function rejectApp(id){let reason=prompt('请输入拒绝理由');if(!reason)return;fetch('/api/admin/points/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,reason:reason})}).then(r=>r.json()).then(d=>{if(d.success){alert('已拒绝');location.reload();}else{alert(d.error);}});}" +
+            "function submitAdjust(){let userId=parseInt(document.getElementById('adjustUserId').value);let amount=parseInt(document.getElementById('adjustAmount').value);let reason=document.getElementById('adjustReason').value;" +
+            "if(!userId||!amount){alert('请填写完整信息');return;}" +
+            "fetch('/api/admin/points/adjust',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,amount:amount,reason:reason})}).then(r=>r.json()).then(d=>{if(d.success){alert('调整成功');location.reload();}else{alert(d.error);}});}</script>"
+        return res_html(html_page("积分管理", body))
+    })
+
+    // --- API: Admin Approve ---
+    router_post(router, "/api/admin/points/approve", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        if (!auth_isAdmin(sessionId)) { return res_json({error: "权限不足"}, 403) }
+        let body = req_getJsonBody(req)
+        let adminUser = auth_currentUser(sessionId)
+        let result = points_approve(req.db, body.id, adminUser.id, null)
+        return res_json(result)
+    })
+
+    // --- API: Admin Reject ---
+    router_post(router, "/api/admin/points/reject", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        if (!auth_isAdmin(sessionId)) { return res_json({error: "权限不足"}, 403) }
+        let body = req_getJsonBody(req)
+        let adminUser = auth_currentUser(sessionId)
+        let result = points_reject(req.db, body.id, adminUser.id, body.reason)
+        return res_json(result)
+    })
+
+    // --- API: Admin Adjust ---
+    router_post(router, "/api/admin/points/adjust", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        if (!auth_isAdmin(sessionId)) { return res_json({error: "权限不足"}, 403) }
+        let body = req_getJsonBody(req)
+        let adminUser = auth_currentUser(sessionId)
+        let result = points_adminAdjust(req.db, body.user_id, body.amount, body.reason, adminUser.id)
+        return res_json(result)
+    })
+
+    return {success: true, routes: 8}
+}

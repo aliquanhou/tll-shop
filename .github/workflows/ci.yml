@@ -2,15 +2,21 @@ name: TLL Shop CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'feature/*']
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
 
 env:
+  # === 固定 TLL OS Toolchain（禁止随 develop 漂移）===
   TLLOS_REPO: aliquanhou/tllos
-  TLLOS_REF: develop
+  TLLOS_REF: f504edcae003fcaafc7f5e53f29acbcfcb10d3de
+  TLLOS_COMMIT: f504edc
   TLLC_PATH: tools/TLLC/tllc.tllbc
+  # Compiler SHA256 (tllc-v1.0.0-rc1, source commit 364b9c5)
+  COMPILER_SHA256: 36A5A20EB1124D2F40ED0051357D06DD976E488489DF61D652140FEFC556A845
+  # Bootstrap/Rescue Compiler SHA256
+  BOOTSTRAP_COMPILER_SHA256: 38825F1487D713B70793049427809F5D376F3586870C38D6CE008D07AED23677
 
 jobs:
   build-and-test:
@@ -25,47 +31,185 @@ jobs:
       - name: Checkout TLL Shop
         uses: actions/checkout@v4
 
-      - name: Checkout TLL OS (for toolchain)
+      - name: Checkout TLL OS (fixed toolchain)
         uses: actions/checkout@v4
         with:
           repository: ${{ env.TLLOS_REPO }}
           ref: ${{ env.TLLOS_REF }}
           path: tllos
-          fetch-depth: 1
 
-      - name: Setup TLL toolchain (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Verify TLL OS commit
+        shell: bash
         run: |
-          cd tllos/host/c
-          make -j$(nproc) 2>/dev/null || gcc -O2 -o tllvm tllvm.c -lpthread -ldl 2>/dev/null || echo "Using prebuilt"
-          ls -la tllvm 2>/dev/null || echo "tllvm not found, will use alternative"
+          echo "=== Verifying TLL OS Toolchain ==="
+          if [ ! -d "tllos" ]; then
+            echo "❌ FAIL: tllos directory not found"
+            exit 1
+          fi
+          cd tllos
+          ACTUAL_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          echo "Expected commit: ${{ env.TLLOS_COMMIT }}"
+          echo "Actual commit:   $ACTUAL_COMMIT"
+          if [ "$ACTUAL_COMMIT" != "${{ env.TLLOS_COMMIT }}" ]; then
+            echo "❌ FAIL: TLL OS commit mismatch!"
+            exit 1
+          fi
+          echo "✅ TLL OS commit verified: $ACTUAL_COMMIT"
 
-      - name: Setup TLL toolchain (Windows)
+      - name: Verify Compiler SHA256
+        shell: bash
+        run: |
+          echo "=== Verifying Compiler SHA256 ==="
+          TLLC="tllos/${{ env.TLLC_PATH }}"
+          if [ ! -f "$TLLC" ]; then
+            echo "❌ FAIL: Compiler not found at $TLLC"
+            exit 1
+          fi
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ACTUAL_SHA=$(powershell -Command "(Get-FileHash '$TLLC' -Algorithm SHA256).Hash.ToUpper()")
+          else
+            ACTUAL_SHA=$(sha256sum "$TLLC" | awk '{print $1}' | tr '[:lower:]' '[:upper:]')
+          fi
+          echo "Expected SHA256: ${{ env.COMPILER_SHA256 }}"
+          echo "Actual SHA256:   $ACTUAL_SHA"
+          if [ "$ACTUAL_SHA" != "${{ env.COMPILER_SHA256 }}" ]; then
+            echo "❌ FAIL: Compiler SHA256 mismatch!"
+            exit 1
+          fi
+          echo "✅ Compiler SHA256 verified"
+          echo "Compiler size: $(wc -c < "$TLLC") bytes"
+
+      - name: Setup build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libssl-dev
+
+      - name: Setup build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install gcc || true
+
+      - name: Build TLL Runtime (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "=== Building TLL Runtime (Linux) ==="
+          cd tllos/host/c
+          echo "Source files:"
+          ls *.c
+          gcc -O2 -std=gnu99 -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE \
+            -o tllvm \
+            main.c vm.c value.c json.c builtin.c \
+            sqlite_builtin.c crypto_builtin.c password_builtin.c \
+            hmac_builtin.c http_client_builtin.c sqlite3.c \
+            -lm -lpthread -ldl -lssl -lcrypto
+          BUILD_RESULT=$?
+          echo "gcc exit code: $BUILD_RESULT"
+          if [ $BUILD_RESULT -ne 0 ] || [ ! -f tllvm ]; then
+            echo "❌ FAIL: tllvm build failed"
+            exit 1
+          fi
+          echo "✅ tllvm built successfully"
+          ls -la tllvm
+          ./tllvm --version 2>/dev/null || true
+
+      - name: Build TLL Runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "=== Building TLL Runtime (macOS) ==="
+          cd tllos/host/c
+          echo "Source files:"
+          ls *.c
+          gcc -O2 -std=gnu99 -D_DARWIN_C_SOURCE \
+            -o tllvm \
+            main.c vm.c value.c json.c builtin.c \
+            sqlite_builtin.c crypto_builtin.c password_builtin.c \
+            hmac_builtin.c http_client_builtin.c sqlite3.c \
+            -lm -lpthread -framework Security -framework CoreFoundation
+          BUILD_RESULT=$?
+          echo "gcc exit code: $BUILD_RESULT"
+          if [ $BUILD_RESULT -ne 0 ] || [ ! -f tllvm ]; then
+            echo "❌ FAIL: tllvm build failed"
+            exit 1
+          fi
+          echo "✅ tllvm built successfully"
+          ls -la tllvm
+          ./tllvm --version 2>/dev/null || true
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build TLL Runtime (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         run: |
+          echo === Building TLL Runtime (Windows) ===
           cd tllos\host\c
-          where cl.exe 2>nul && cl /O2 /Fe:tllvm.exe tllvm.c /link ws2_32.lib winhttp.lib 2>nul || echo "MSVC not available, using prebuilt"
-          dir tllvm.exe 2>nul || echo "tllvm.exe not found"
+          cl /O2 /D_CRT_SECURE_NO_WARNINGS /Fe:tllvm.exe main.c vm.c value.c json.c builtin.c sqlite_builtin.c crypto_builtin.c password_builtin.c hmac_builtin.c http_client_builtin.c sqlite3.c ws2_32.lib winhttp.lib bcrypt.lib
+          if errorlevel 1 (
+            echo ❌ FAIL: tllvm.exe build failed
+            exit /b 1
+          )
+          echo ✅ tllvm.exe built successfully
+          dir tllvm.exe
+
+      - name: Verify Runtime exists
+        shell: bash
+        run: |
+          echo "=== Verifying Runtime ==="
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            TLLVM="tllos/host/c/tllvm.exe"
+          else
+            TLLVM="tllos/host/c/tllvm"
+          fi
+          if [ ! -f "$TLLVM" ]; then
+            echo "❌ FAIL: Runtime not found at $TLLVM"
+            exit 1
+          fi
+          echo "✅ Runtime found: $TLLVM"
+          ls -la "$TLLVM"
 
       - name: Compile TLL Shop
         shell: bash
         run: |
           echo "=== Compiling mall/main.tll ==="
-          TLLVM="tllos/host/c/tllvm"
-          TLLC="tllos/${TLLC_PATH}"
           if [ "${{ runner.os }}" = "Windows" ]; then
             TLLVM="tllos/host/c/tllvm.exe"
-          fi
-          if [ -f "$TLLVM" ] && [ -f "$TLLC" ]; then
-            "$TLLVM" "$TLLC" compile mall/main.tll -o mall/main.tllbc
-            echo "Compilation successful"
-            ls -la mall/main.tllbc
           else
-            echo "TLL toolchain not available, skipping compilation"
-            echo "TLLVM exists: $(test -f "$TLLVM" && echo yes || echo no)"
-            echo "TLLC exists: $(test -f "$TLLC" && echo yes || echo no)"
+            TLLVM="tllos/host/c/tllvm"
           fi
+          TLLC="tllos/${{ env.TLLC_PATH }}"
+
+          # 工具链缺失时必须 FAIL，禁止静默跳过
+          if [ ! -f "$TLLVM" ]; then
+            echo "❌ FAIL: TLL Runtime not found at $TLLVM"
+            exit 1
+          fi
+          if [ ! -f "$TLLC" ]; then
+            echo "❌ FAIL: TLL Compiler not found at $TLLC"
+            exit 1
+          fi
+
+          echo "Runtime: $TLLVM"
+          echo "Compiler: $TLLC"
+          echo ""
+
+          "$TLLVM" "$TLLC" compile mall/main.tll -o mall/main.tllbc
+          COMPILE_RESULT=$?
+
+          if [ $COMPILE_RESULT -ne 0 ]; then
+            echo "❌ FAIL: Compilation failed with exit code $COMPILE_RESULT"
+            exit 1
+          fi
+
+          if [ ! -f mall/main.tllbc ]; then
+            echo "❌ FAIL: Output file mall/main.tllbc not created"
+            exit 1
+          fi
+
+          echo "✅ Compilation successful"
+          ls -la mall/main.tllbc
+          echo "Output size: $(wc -c < mall/main.tllbc) bytes"
 
       - name: Verify source files
         shell: bash
@@ -81,6 +225,42 @@ jobs:
           echo "=== User modules ==="
           ls mall/modules/*.tll
 
+      - name: Run P1 Session CSPRNG Test
+        shell: bash
+        run: |
+          echo "=== P1 Session CSPRNG Security Test ==="
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            TLLVM="tllos/host/c/tllvm.exe"
+          else
+            TLLVM="tllos/host/c/tllvm"
+          fi
+          TLLC="tllos/${{ env.TLLC_PATH }}"
+
+          # Compile P1 test
+          echo "Compiling P1 test..."
+          "$TLLVM" "$TLLC" compile tests/P1-session-csprng-test.tll -o tests/P1-session-csprng-test.tllbc
+          TEST_COMPILE_RESULT=$?
+          if [ $TEST_COMPILE_RESULT -ne 0 ]; then
+            echo "❌ FAIL: P1 test compilation failed"
+            exit 1
+          fi
+          if [ ! -f tests/P1-session-csprng-test.tllbc ]; then
+            echo "❌ FAIL: P1 test output not created"
+            exit 1
+          fi
+
+          # Run P1 test
+          echo "Running P1 test..."
+          "$TLLVM" tests/P1-session-csprng-test.tllbc
+          TEST_RESULT=$?
+          echo ""
+          echo "P1 test exit code: $TEST_RESULT"
+          if [ $TEST_RESULT -ne 0 ]; then
+            echo "❌ FAIL: P1 Session CSPRNG test failed"
+            exit 1
+          fi
+          echo "✅ P1 Session CSPRNG test passed"
+
       - name: Check for SQL injection patterns (informational)
         shell: bash
         run: |
@@ -89,6 +269,8 @@ jobs:
           grep -rn 'db_query.*+' mall/core/*.tll mall/modules/*.tll | head -20 || echo "No patterns found"
           echo ""
           echo "Count: $(grep -rn 'db_query.*+' mall/core/*.tll mall/modules/*.tll 2>/dev/null | wc -l) occurrences"
+          echo ""
+          echo "Note: This is informational only, does not fail CI"
 
       - name: Upload build artifact
         if: success()
@@ -97,4 +279,4 @@ jobs:
           name: tll-shop-${{ matrix.os }}
           path: |
             mall/main.tllbc
-          if-no-files-found: ignore
+          if-no-files-found: error

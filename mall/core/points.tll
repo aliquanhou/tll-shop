@@ -1,0 +1,271 @@
+// TLL Shop - Points System
+// 积分发行、申请、审批、消费、退款、账本
+// 完整商业闭环：用户申请 -> 老板审批 -> 积分入账 -> 购物支付 -> 退款返还
+
+from "./database" import db_get, db_release, db_exec, db_query, db_queryOne, db_begin, db_commit, db_rollback, db_insert
+
+// === Database Tables ===
+
+fn points_initTables(db) {
+    // 用户积分钱包
+    db_exec(db, "CREATE TABLE IF NOT EXISTS point_wallets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE NOT NULL,
+        balance INTEGER DEFAULT 0,
+        frozen INTEGER DEFAULT 0,
+        total_earned INTEGER DEFAULT 0,
+        total_spent INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+    )")
+
+    // 积分申请
+    db_exec(db, "CREATE TABLE IF NOT EXISTS point_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        reason TEXT,
+        status TEXT DEFAULT 'pending',
+        approved_by INTEGER,
+        approved_at TEXT,
+        rejected_reason TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+    )")
+
+    // 积分流水账本
+    db_exec(db, "CREATE TABLE IF NOT EXISTS point_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        balance_before INTEGER DEFAULT 0,
+        balance_after INTEGER DEFAULT 0,
+        reference_type TEXT,
+        reference_id INTEGER,
+        description TEXT,
+        operator_id INTEGER,
+        created_at TEXT DEFAULT (datetime('now'))
+    )")
+
+    // 积分系统设置
+    db_exec(db, "CREATE TABLE IF NOT EXISTS point_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        description TEXT,
+        updated_at TEXT DEFAULT (datetime('now'))
+    )")
+
+    // 初始化默认设置
+    db_exec(db, "INSERT OR IGNORE INTO point_settings (key, value, description) VALUES ('enabled', '1', '积分系统是否开启')")
+    db_exec(db, "INSERT OR IGNORE INTO point_settings (key, value, description) VALUES ('max_apply_amount', '10000', '单次申请最大积分')")
+    db_exec(db, "INSERT OR IGNORE INTO point_settings (key, value, description) VALUES ('auto_approve', '0', '是否自动批准申请')")
+    db_exec(db, "INSERT OR IGNORE INTO point_settings (key, value, description) VALUES ('exchange_rate', '100', '积分兑换比例：100积分=1元')")
+
+    return {success: true, tables: 4}
+}
+
+// === Wallet Functions ===
+
+fn points_getWallet(db, userId) {
+    let wallet = db_queryOne(db, "SELECT * FROM point_wallets WHERE user_id = ?", [userId])
+    if (wallet == null) {
+        // 自动创建钱包
+        db_exec(db, "INSERT INTO point_wallets (user_id, balance) VALUES (?, 0)", [userId])
+        wallet = db_queryOne(db, "SELECT * FROM point_wallets WHERE user_id = ?", [userId])
+    }
+    return wallet
+}
+
+fn points_getBalance(db, userId) {
+    let wallet = points_getWallet(db, userId)
+    if (wallet == null) { return 0 }
+    return wallet.balance
+}
+
+// 增加积分（内部函数，需要事务）
+fn points_addInternal(db, userId, amount, referenceType, referenceId, description, operatorId) {
+    let wallet = points_getWallet(db, userId)
+    let balanceBefore = wallet.balance
+    let balanceAfter = balanceBefore + amount
+    db_exec(db, "UPDATE point_wallets SET balance = ?, total_earned = total_earned + ?, updated_at = datetime('now') WHERE user_id = ?", [balanceAfter, amount, userId])
+    db_exec(db, "INSERT INTO point_ledger (user_id, type, amount, balance_before, balance_after, reference_type, reference_id, description, operator_id) VALUES (?, 'earn', ?, ?, ?, ?, ?, ?, ?)", [userId, amount, balanceBefore, balanceAfter, referenceType, referenceId, description, operatorId])
+    return {success: true, balance_before: balanceBefore, balance_after: balanceAfter}
+}
+
+// 扣减积分（内部函数，需要事务）
+fn points_spendInternal(db, userId, amount, referenceType, referenceId, description, operatorId) {
+    let wallet = points_getWallet(db, userId)
+    if (wallet.balance < amount) {
+        return {error: "积分不足", balance: wallet.balance, required: amount}
+    }
+    let balanceBefore = wallet.balance
+    let balanceAfter = balanceBefore - amount
+    db_exec(db, "UPDATE point_wallets SET balance = ?, total_spent = total_spent + ?, updated_at = datetime('now') WHERE user_id = ?", [balanceAfter, amount, userId])
+    db_exec(db, "INSERT INTO point_ledger (user_id, type, amount, balance_before, balance_after, reference_type, reference_id, description, operator_id) VALUES (?, 'spend', ?, ?, ?, ?, ?, ?, ?)", [userId, amount, balanceBefore, balanceAfter, referenceType, referenceId, description, operatorId])
+    return {success: true, balance_before: balanceBefore, balance_after: balanceAfter}
+}
+
+// 退款返还积分（内部函数，需要事务）
+fn points_refundInternal(db, userId, amount, referenceType, referenceId, description, operatorId) {
+    let wallet = points_getWallet(db, userId)
+    let balanceBefore = wallet.balance
+    let balanceAfter = balanceBefore + amount
+    db_exec(db, "UPDATE point_wallets SET balance = ?, total_earned = total_earned + ?, updated_at = datetime('now') WHERE user_id = ?", [balanceAfter, amount, userId])
+    db_exec(db, "INSERT INTO point_ledger (user_id, type, amount, balance_before, balance_after, reference_type, reference_id, description, operator_id) VALUES (?, 'refund', ?, ?, ?, ?, ?, ?, ?)", [userId, amount, balanceBefore, balanceAfter, referenceType, referenceId, description, operatorId])
+    return {success: true, balance_before: balanceBefore, balance_after: balanceAfter}
+}
+
+// === Application Functions ===
+
+fn points_apply(db, userId, amount, reason) {
+    // 检查系统是否开启
+    let enabled = db_queryOne(db, "SELECT value FROM point_settings WHERE key = 'enabled'")
+    if (enabled != null && enabled.value == "0") {
+        return {error: "积分系统暂未开启"}
+    }
+    // 验证金额
+    if (amount == null || amount <= 0) {
+        return {error: "申请金额必须大于0"}
+    }
+    let maxApply = db_queryOne(db, "SELECT value FROM point_settings WHERE key = 'max_apply_amount'")
+    if (maxApply != null) {
+        let maxAmount = convert.toInt(maxApply.value)
+        if (amount > maxAmount) {
+            return {error: "单次申请不能超过 " + convert.toString(maxAmount) + " 积分"}
+        }
+    }
+    // 创建申请
+    let applyId = db_insert(db, "INSERT INTO point_applications (user_id, amount, reason, status) VALUES (?, ?, ?, 'pending')", [userId, amount, reason])
+    // 检查是否自动批准
+    let autoApprove = db_queryOne(db, "SELECT value FROM point_settings WHERE key = 'auto_approve'")
+    if (autoApprove != null && autoApprove.value == "1") {
+        return points_approve(db, applyId, 0, "自动批准")
+    }
+    return {success: true, application_id: applyId, status: "pending"}
+}
+
+fn points_approve(db, applicationId, operatorId, remark) {
+    let app = db_queryOne(db, "SELECT * FROM point_applications WHERE id = ?", [applicationId])
+    if (app == null) {
+        return {error: "申请不存在"}
+    }
+    if (app.status != "pending") {
+        return {error: "申请已处理，当前状态：" + app.status}
+    }
+    // 事务：更新申请状态 + 增加积分
+    db_begin(db)
+    db_exec(db, "UPDATE point_applications SET status = 'approved', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [operatorId, applicationId])
+    let remarkSuffix = ""
+    if (remark != null) { remarkSuffix = "：" + remark }
+    let result = points_addInternal(db, app.user_id, app.amount, "application", applicationId, "申请积分批准" + remarkSuffix, operatorId)
+    if (result.error != null) {
+        db_rollback(db)
+        return result
+    }
+    db_commit(db)
+    return {success: true, application_id: applicationId, balance_after: result.balance_after}
+}
+
+fn points_reject(db, applicationId, operatorId, reason) {
+    let app = db_queryOne(db, "SELECT * FROM point_applications WHERE id = ?", [applicationId])
+    if (app == null) {
+        return {error: "申请不存在"}
+    }
+    if (app.status != "pending") {
+        return {error: "申请已处理，当前状态：" + app.status}
+    }
+    db_exec(db, "UPDATE point_applications SET status = 'rejected', approved_by = ?, rejected_reason = ?, updated_at = datetime('now') WHERE id = ?", [operatorId, reason, applicationId])
+    return {success: true, application_id: applicationId, status: "rejected"}
+}
+
+fn points_listApplications(db, userId, status, limit, offset) {
+    let sql = "SELECT * FROM point_applications"
+    let conditions = []
+    let params = []
+    if (userId != null) {
+        arrays.push(conditions, "user_id = ?")
+        arrays.push(params, userId)
+    }
+    if (status != null && strings.length(status) > 0) {
+        arrays.push(conditions, "status = ?")
+        arrays.push(params, status)
+    }
+    if (arrays.length(conditions) > 0) {
+        sql = sql + " WHERE " + strings.join(conditions, " AND ")
+    }
+    sql = sql + " ORDER BY id DESC"
+    if (limit != null) {
+        sql = sql + " LIMIT " + convert.toString(limit)
+    }
+    if (offset != null) {
+        sql = sql + " OFFSET " + convert.toString(offset)
+    }
+    return db_query(db, sql, params)
+}
+
+// === Ledger Functions ===
+
+fn points_getLedger(db, userId, limit, offset) {
+    let sql = "SELECT * FROM point_ledger"
+    let params = []
+    if (userId != null) {
+        sql = sql + " WHERE user_id = ?"
+        arrays.push(params, userId)
+    }
+    sql = sql + " ORDER BY id DESC"
+    if (limit != null) {
+        sql = sql + " LIMIT " + convert.toString(limit)
+    }
+    if (offset != null) {
+        sql = sql + " OFFSET " + convert.toString(offset)
+    }
+    return db_query(db, sql, params)
+}
+
+// === Admin Functions ===
+
+fn points_adminAdjust(db, userId, amount, description, operatorId) {
+    if (amount == null || amount == 0) {
+        return {error: "调整金额不能为0"}
+    }
+    db_begin(db)
+    let result = null
+    if (amount > 0) {
+        result = points_addInternal(db, userId, amount, "admin_adjust", 0, "管理员调整：" + description, operatorId)
+    } else {
+        result = points_spendInternal(db, userId, -amount, "admin_adjust", 0, "管理员扣减：" + description, operatorId)
+    }
+    if (result.error != null) {
+        db_rollback(db)
+        return result
+    }
+    db_commit(db)
+    return result
+}
+
+fn points_getSettings(db) {
+    return db_query(db, "SELECT * FROM point_settings")
+}
+
+fn points_updateSetting(db, key, value) {
+    db_exec(db, "UPDATE point_settings SET value = ?, updated_at = datetime('now') WHERE key = ?", [value, key])
+    return {success: true, key: key, value: value}
+}
+
+// === Stats Functions ===
+
+fn points_getStats(db) {
+    let totalUsers = db_queryOne(db, "SELECT COUNT(*) as cnt FROM point_wallets")
+    let totalBalance = db_queryOne(db, "SELECT SUM(balance) as total FROM point_wallets")
+    let totalEarned = db_queryOne(db, "SELECT SUM(total_earned) as total FROM point_wallets")
+    let totalSpent = db_queryOne(db, "SELECT SUM(total_spent) as total FROM point_wallets")
+    let pendingApps = db_queryOne(db, "SELECT COUNT(*) as cnt FROM point_applications WHERE status = 'pending'")
+    return {
+        total_users: totalUsers.cnt,
+        total_balance: totalBalance.total,
+        total_earned: totalEarned.total,
+        total_spent: totalSpent.total,
+        pending_applications: pendingApps.cnt
+    }
+}

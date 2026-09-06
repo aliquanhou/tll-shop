@@ -26,7 +26,45 @@ TLL Shop 依赖的 TLL OS 工具链版本记录。
 ### TLL OS 仓库
 - **仓库**: https://github.com/aliquanhou/tllos
 - **main 分支**: 6875401（P2 清理完成，稳定基线）
-- **develop 分支**: c3d9696（Mall-P0-1 用户中心表补全，迁移基线）
+- **develop 分支**: 880115c（移除 Shop 业务代码，仓库边界清理）
+
+## CI 固定 Toolchain（P0.1 Toolchain Dependency Pinning）
+
+Shop CI 必须使用固定的 TLL OS Toolchain，禁止随 develop 自动漂移。
+
+### CI 配置
+- **CI 文件**: `.github/workflows/ci.yml`
+- **TLLOS_REPO**: aliquanhou/tllos
+- **TLLOS_REF**: 6875401（固定 main 稳定基线）
+- **TLLOS_COMMIT**: 6875401
+- **TLLC_PATH**: tools/TLLC/tllc.tllbc
+
+### SHA256 验证
+CI 构建时必须验证：
+1. TLL OS commit == 6875401
+2. Compiler SHA256 == 36A5A20EB1124D2F40ED0051357D06DD976E488489DF61D652140FEFC556A845
+3. Runtime 构建成功
+4. 工具链缺失时 CI FAIL（禁止静默跳过）
+
+### 可重复构建保证
+```
+TLL Shop Commit
+    ↓
+固定 TLL OS Commit (6875401)
+    ↓
+固定 Compiler SHA256 (36A5A20E...)
+    ↓
+可重复构建
+```
+
+### 升级 Toolchain 流程
+当需要升级 TLL Toolchain 时：
+1. 在 TLL OS 仓库完成新能力开发和封板
+2. 更新本文件的 TLLOS_COMMIT 和 COMPILER_SHA256
+3. 更新 `.github/workflows/ci.yml` 中的 TLLOS_REF
+4. 在 develop 分支测试 CI 通过
+5. 验收后合并 main
+6. 记录升级原因和影响
 
 ## 已封板能力
 
