@@ -86,7 +86,7 @@ fn uc_homePage(req, currentUser) {
     uc_ensureFields(db)
 
     // Get user stats
-    let userInfo = db_queryOne(db, "SELECT * FROM users WHERE id=" + convert.toString(currentUser.id))
+    let userInfo = db_queryOne(db, "SELECT * FROM users WHERE id = ?", [currentUser.id])
     let points = 0
     let balance = 0.0
     let levelId = 1
@@ -99,16 +99,16 @@ fn uc_homePage(req, currentUser) {
     }
 
     // Get level info
-    let levelInfo = db_queryOne(db, "SELECT * FROM member_levels WHERE id=" + convert.toString(levelId))
+    let levelInfo = db_queryOne(db, "SELECT * FROM member_levels WHERE id = ?", [levelId])
     let levelName = "普通会员"
     if (levelInfo != null) { levelName = levelInfo.name }
 
     // Get order counts by status
-    let pendingPayment = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id=" + convert.toString(currentUser.id) + " AND status='pending'")
-    let pendingShipment = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id=" + convert.toString(currentUser.id) + " AND status='paid'")
-    let pendingReceipt = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id=" + convert.toString(currentUser.id) + " AND status='shipped'")
-    let pendingReview = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id=" + convert.toString(currentUser.id) + " AND status='completed'")
-    let afterSale = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id=" + convert.toString(currentUser.id) + " AND status='refund'")
+    let pendingPayment = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ? AND status='pending'", [currentUser.id])
+    let pendingShipment = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ? AND status='paid'", [currentUser.id])
+    let pendingReceipt = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ? AND status='shipped'", [currentUser.id])
+    let pendingReview = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ? AND status='completed'", [currentUser.id])
+    let afterSale = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ? AND status='refund'", [currentUser.id])
 
     let ppCnt = 0
     let psCnt = 0
@@ -122,17 +122,17 @@ fn uc_homePage(req, currentUser) {
     if (afterSale != null) { asCnt = afterSale.cnt }
 
     // Get coupon count
-    let couponCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_coupons WHERE user_id=" + convert.toString(currentUser.id) + " AND status='unused'")
+    let couponCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_coupons WHERE user_id = ? AND status='unused'", [currentUser.id])
     let cpCnt = 0
     if (couponCount != null) { cpCnt = couponCount.cnt }
 
     // Get collection count
-    let collectCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_collections WHERE user_id=" + convert.toString(currentUser.id))
+    let collectCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_collections WHERE user_id = ?", [currentUser.id])
     let clCnt = 0
     if (collectCount != null) { clCnt = collectCount.cnt }
 
     // Get recent orders
-    let recentOrders = db_query(db, "SELECT * FROM orders WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at DESC LIMIT 3")
+    let recentOrders = db_query(db, "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 3", [currentUser.id])
 
     // Build order badges
     let ppBadge = ""

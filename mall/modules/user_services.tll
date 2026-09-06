@@ -16,9 +16,9 @@ fn us_invitePage(req) {
     let db = req.db
     us_ensureTables(db)
     let inviteCode = "TLL" + convert.toString(10000 + currentUser.id)
-    let inviteCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM invitations WHERE inviter_id=" + convert.toString(currentUser.id))
-    let rewardPoints = db_queryOne(db, "SELECT COALESCE(SUM(reward_points),0) as total FROM invitations WHERE inviter_id=" + convert.toString(currentUser.id) + " AND status='completed'")
-    let invites = db_query(db, "SELECT i.*, u.username as invitee_name FROM invitations i LEFT JOIN users u ON i.invitee_id=u.id WHERE i.inviter_id=" + convert.toString(currentUser.id) + " ORDER BY i.created_at DESC LIMIT 20")
+    let inviteCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM invitations WHERE inviter_id = ?", [currentUser.id])
+    let rewardPoints = db_queryOne(db, "SELECT COALESCE(SUM(reward_points),0) as total FROM invitations WHERE inviter_id = ? AND status='completed'", [currentUser.id])
+    let invites = db_query(db, "SELECT i.*, u.username as invitee_name FROM invitations i LEFT JOIN users u ON i.invitee_id=u.id WHERE i.inviter_id = ? ORDER BY i.created_at DESC LIMIT 20", [currentUser.id])
     let html = "<div class='us-stat-row' style='background:linear-gradient(135deg,#667eea,#764ba2)'><div class='us-stat-item'><div class='us-stat-num'>" + convert.toString(inviteCount.cnt) + "</div><div class='us-stat-label'>邀请人数</div></div><div class='us-stat-item'><div class='us-stat-num'>" + convert.toString(rewardPoints.total) + "</div><div class='us-stat-label'>累计积分</div></div><div class='us-stat-item'><div class='us-stat-num'>100</div><div class='us-stat-label'>每人奖励</div></div></div>" +
         "<div class='us-card' style='padding:20px;text-align:center'><div style='font-size:14px;color:#666;margin-bottom:8px'>我的邀请码</div><div style='font-size:32px;font-weight:bold;color:#ff6a00;letter-spacing:4px;margin-bottom:16px'>" + inviteCode + "</div><button class='us-btn' style='margin-right:8px' onclick=\"navigator.clipboard.writeText('" + inviteCode + "');alert('邀请码已复制')\">复制邀请码</button><button class='us-btn us-btn-outline' onclick='showShareModal()'>分享给好友</button></div>" +
         "<div id='shareModal' style='display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center'><div style='background:#fff;border-radius:12px;padding:24px;width:80%;max-width:320px;text-align:center'><div style='font-size:18px;font-weight:600;margin-bottom:16px'>分享给好友</div><div style='margin-bottom:16px'><img src='https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://shop.tllos.com/register?invite=" + inviteCode + "' style='width:180px;height:180px;border:1px solid #eee;border-radius:8px'></div><div style='font-size:13px;color:#666;margin-bottom:8px'>邀请链接：</div><div style='font-size:12px;color:#333;background:#f5f5f5;padding:8px;border-radius:4px;margin-bottom:16px;word-break:break-all'>https://shop.tllos.com/register?invite=" + inviteCode + "</div><button class='us-btn' style='width:100%' onclick=\"navigator.clipboard.writeText('https://shop.tllos.com/register?invite=" + inviteCode + "');alert('邀请链接已复制')\">复制链接</button><button class='us-btn us-btn-outline' style='width:100%;margin-top:8px' onclick='hideShareModal()'>关闭</button></div></div>" +
@@ -49,7 +49,7 @@ fn us_historyPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let history = db_query(db, "SELECT * FROM browsing_history WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at DESC LIMIT 50")
+    let history = db_query(db, "SELECT * FROM browsing_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", [currentUser.id])
     let html = ""
     if (arrays.length(history) == 0) {
         html = "<div class='us-empty'><div class='us-empty-icon'>👣</div><div class='us-empty-text'>暂无浏览记录</div><a href='/' class='us-btn'>去逛逛</a></div>"
@@ -79,7 +79,7 @@ fn us_historyClear(req) {
     let currentUser = us_requireLogin(req)
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
-    db_exec(db, "DELETE FROM browsing_history WHERE user_id=" + convert.toString(currentUser.id))
+    db_exec(db, "DELETE FROM browsing_history WHERE user_id = ?", [currentUser.id])
     return res_redirect("/user/history")
 }
 
@@ -104,7 +104,7 @@ fn us_complaintPage(req) {
             "</div></div>" +
             "<script>function submitComplaint(){let t=document.getElementById('type').value;let ti=document.getElementById('title').value;let c=document.getElementById('content').value;let co=document.getElementById('contact').value;if(!ti){alert('请输入标题');return;}if(!c){alert('请输入详细描述');return;}fetch('/user/complaint/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:t,title:ti,content:c,contact:co})}).then(r=>r.json()).then(d=>{if(d.success){alert('提交成功，感谢您的反馈！');location.href='/user/complaint?tab=list';}else{alert(d.error);}});}</script>"
     } else {
-        let complaints = db_query(db, "SELECT * FROM complaints WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at DESC LIMIT 20")
+        let complaints = db_query(db, "SELECT * FROM complaints WHERE user_id = ? ORDER BY created_at DESC LIMIT 20", [currentUser.id])
         if (arrays.length(complaints) == 0) {
             html = html + "<div class='us-empty'><div class='us-empty-icon'>📝</div><div class='us-empty-text'>暂无反馈记录</div><a href='/user/complaint?tab=new' class='us-btn'>提交反馈</a></div>"
         } else {
@@ -135,7 +135,7 @@ fn us_complaintSubmit(req) {
     let body = req_getJsonBody(req)
     let db = req.db
     us_ensureTables(db)
-    db_exec(db, "INSERT INTO complaints (user_id, type, title, content, contact) VALUES (" + convert.toString(currentUser.id) + ", '" + body.type + "', '" + body.title + "', '" + body.content + "', '" + body.contact + "')")
+    db_exec(db, "INSERT INTO complaints (user_id, type, title, content, contact) VALUES (?, ?, ?, ?, ?)", [currentUser.id, body.type, body.title, body.content, body.contact])
     return res_json({success: true})
 }
 
@@ -144,7 +144,7 @@ fn us_complaintDetail(req, complaintId) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let c = db_queryOne(db, "SELECT * FROM complaints WHERE id=" + convert.toString(complaintId) + " AND user_id=" + convert.toString(currentUser.id))
+    let c = db_queryOne(db, "SELECT * FROM complaints WHERE id = ? AND user_id = ?", [complaintId, currentUser.id])
     let html = ""
     if (c == null) {
         html = "<div class='us-empty'><div class='us-empty-icon'>❓</div><div class='us-empty-text'>反馈不存在</div></div>"
