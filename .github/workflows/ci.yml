@@ -251,12 +251,22 @@ jobs:
 
           # Run P1 test
           echo "Running P1 test..."
-          "$TLLVM" tests/P1-session-csprng-test.tllbc
-          TEST_RESULT=$?
+          "$TLLVM" tests/P1-session-csprng-test.tllbc 2>&1 | tee p1_test_output.txt
+          TEST_RESULT=${PIPESTATUS[0]}
           echo ""
           echo "P1 test exit code: $TEST_RESULT"
+          # Dual verification: exit code AND output content
+          # TLL main() return value may NOT set process exit code, so check output too
           if [ $TEST_RESULT -ne 0 ]; then
-            echo "❌ FAIL: P1 Session CSPRNG test failed"
+            echo "❌ FAIL: P1 Session CSPRNG test failed (exit code non-zero)"
+            exit 1
+          fi
+          if grep -q "RESULT:.*FAILED" p1_test_output.txt; then
+            echo "❌ FAIL: P1 Session CSPRNG test failed (detected FAILED result in output)"
+            exit 1
+          fi
+          if grep -q "  FAIL:" p1_test_output.txt; then
+            echo "❌ FAIL: P1 Session CSPRNG test failed (detected FAIL assertions in output)"
             exit 1
           fi
           echo "✅ P1 Session CSPRNG test passed"
