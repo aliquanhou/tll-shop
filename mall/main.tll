@@ -1,4 +1,4 @@
-// TLL Mall - Main Entry
+﻿// TLL Mall - Main Entry
 // Commercial-grade B2C mall built entirely in TLL
 
 from "./core/database" import db_open, db_close, db_exec, db_query, db_queryOne, db_insert, db_begin, db_commit, db_rollback, db_get, db_release
@@ -152,8 +152,8 @@ router_get(mallRouter, "/category/:id", fn(req) {
     let sessionId = cookie_getSessionId(req)
     let currentUser = auth_currentUser(sessionId)
     let catId = convert.toInt(req.params.id)
-    let category = db_queryOne(req.db, "SELECT * FROM categories WHERE id=" + convert.toString(catId))
-    let products = db_query(req.db, "SELECT * FROM products WHERE category_id=" + convert.toString(catId) + " AND status='on' ORDER BY id DESC")
+    let category = db_queryOne(req.db, "SELECT * FROM categories WHERE id = ?", [catId])
+    let products = db_query(req.db, "SELECT * FROM products WHERE category_id = ? AND status='on' ORDER BY id DESC", [catId])
     let productHtml = ""
     if (arrays.length(products) == 0) {
         productHtml = "<div class='empty'>该分类下暂无商品</div>"
@@ -173,6 +173,47 @@ router_get(mallRouter, "/category/:id", fn(req) {
     let body = html_header(currentUser) + "<div class='container'><div class='breadcrumb'><a href='/'>首页</a> / " + catName + "</div>" +
         "<h2 style='margin-bottom:20px'>" + catName + "</h2><div class='product-grid'>" + productHtml + "</div></div>"
     return res_html(html_page(catName, body))
+})
+
+
+// --- Product Search ---
+router_get(mallRouter, "/search", fn(req) {
+    let sessionId = cookie_getSessionId(req)
+    let currentUser = auth_currentUser(sessionId)
+    let keyword = req_getQuery(req, "q", "")
+    let products = []
+    if (keyword != null && strings.length(keyword) > 0) {
+        let searchPattern = "%" + keyword + "%"
+        products = db_query(req.db, "SELECT * FROM products WHERE status='on' AND (name LIKE ? OR description LIKE ?) ORDER BY id DESC", [searchPattern, searchPattern])
+    }
+    let productHtml = ""
+    if (arrays.length(products) == 0) {
+        if (keyword != null && strings.length(keyword) > 0) {
+            productHtml = "<div class='empty'>未找到相关商品</div>"
+        } else {
+            productHtml = "<div class='empty'>请输入搜索关键词</div>"
+        }
+    } else {
+        let i = 0
+        while (i < arrays.length(products)) {
+            let p = products[i]
+            productHtml = productHtml + "<div class='product-card' onclick=\"location.href='/product/" + convert.toString(p.id) + "'\">" +
+                "<div class='product-img'>" + strings.charAt(p.name, 0) + "</div>" +
+                "<div class='product-info'><div class='product-name'>" + p.name + "</div>" +
+                "<div class='product-price'>¥" + convert.toString(p.price) + "</div></div></div>"
+            i = i + 1
+        }
+    }
+    let searchVal = ""
+    if (keyword != null) { searchVal = keyword }
+    let body = html_header(currentUser) +
+        "<div class='container'><div class='breadcrumb'><a href='/'>首页</a> / 搜索</div>" +
+        "<div class='card'><form action='/search' method='GET' style='display:flex;gap:10px'>" +
+        "<input type='text' name='q' placeholder='搜索商品...' value='" + searchVal + "' style='flex:1;padding:10px;border:1px solid #ddd;border-radius:4px'>" +
+        "<button type='submit' class='btn'>搜索</button></form></div>" +
+        "<h3 style='margin:20px 0'>搜索结果 (" + convert.toString(arrays.length(products)) + ")</h3>" +
+        "<div class='product-grid'>" + productHtml + "</div></div>"
+    return res_html(html_page("搜索", body))
 })
 
 // --- Product Detail ---
