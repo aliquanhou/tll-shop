@@ -71,7 +71,7 @@ fn p3_registerUploadRoutes(router, db) {
         // For now, just return success with URL
         let fileUrl = "/uploads/" + filename
         // Record in database
-        db_exec(req.db, "INSERT INTO uploads (filename, url, size, type, created_at) VALUES (?, ?, ?, 'image', datetime('now'))", [p3_esc(filename), p3_esc(fileUrl), strings.length(content)])
+        db_exec(req.db, "INSERT INTO uploads (filename, url, size, type, created_at) VALUES ('" + p3_esc(filename) + "', '" + p3_esc(fileUrl) + "', " + convert.toString(strings.length(content)) + ", 'image', datetime('now'))")
         return res_json({success: true, url: fileUrl, filename: filename})
     })
 
@@ -130,7 +130,7 @@ fn p3_registerMerchantRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE merchants SET status='approved', approved_at=datetime('now') WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE merchants SET status='approved', approved_at=datetime('now') WHERE id=" + convert.toString(id))
         return res_redirect("/admin/merchants")
     })
 
@@ -139,7 +139,7 @@ fn p3_registerMerchantRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE merchants SET status='rejected', rejected_at=datetime('now') WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE merchants SET status='rejected', rejected_at=datetime('now') WHERE id=" + convert.toString(id))
         return res_redirect("/admin/merchants")
     })
 
@@ -152,7 +152,7 @@ fn p3_registerMerchantRoutes(router, db) {
         let name = p3_esc(data.name)
         let desc = p3_esc(data.description)
         let phone = p3_esc(data.contact_phone)
-        db_exec(req.db, "INSERT INTO merchants (user_id, name, description, contact_phone, status, balance, created_at) VALUES (?, ?, ?, ?, 'pending', 0, datetime('now'))", [userId, name, desc, phone])
+        db_exec(req.db, "INSERT INTO merchants (user_id, name, description, contact_phone, status, balance, created_at) VALUES (" + convert.toString(userId) + ", '" + name + "', '" + desc + "', '" + phone + "', 'pending', 0, datetime('now'))")
         return res_json({success: true, message: "Application submitted"})
     })
 
@@ -161,7 +161,7 @@ fn p3_registerMerchantRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let userId = req.currentUser.id
-        let merchant = db_queryOne(req.db, "SELECT * FROM merchants WHERE user_id = ?", [userId])
+        let merchant = db_queryOne(req.db, "SELECT * FROM merchants WHERE user_id=" + convert.toString(userId))
         if (merchant == null) {
             let body = "<h1>Merchant Center</h1><div class='card'><h3>Apply to Become a Merchant</h3><form method='POST' action='/merchant/apply'>" +
                 "<div class='form-group'><label>Store Name</label><input type='text' name='name' required></div>" +
@@ -213,7 +213,7 @@ fn p3_registerDistributionRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE distributors SET balance = 0 WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE distributors SET balance=0 WHERE id=" + convert.toString(id))
         return res_redirect("/admin/distribution")
     })
 
@@ -222,12 +222,12 @@ fn p3_registerDistributionRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let userId = req.currentUser.id
-        let distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id = ?", [userId])
+        let distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id=" + convert.toString(userId))
         if (distributor == null) {
-            db_exec(req.db, "INSERT INTO distributors (user_id, level, total_commission, balance, created_at) VALUES (?, 1, 0, 0, datetime('now'))", [userId])
-            distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id = ?", [userId])
+            db_exec(req.db, "INSERT INTO distributors (user_id, level, total_commission, balance, created_at) VALUES (" + convert.toString(userId) + ", 1, 0, 0, datetime('now'))")
+            distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id=" + convert.toString(userId))
         }
-        let orders = db_query(req.db, "SELECT * FROM distribution_orders WHERE distributor_id = ? ORDER BY id DESC LIMIT 20", [distributor.id])
+        let orders = db_query(req.db, "SELECT * FROM distribution_orders WHERE distributor_id=" + convert.toString(distributor.id) + " ORDER BY id DESC LIMIT 20")
         let orderHtml = ""
         let i = 0
         while (i < arrays.length(orders)) {
@@ -282,7 +282,7 @@ fn p3_registerCSRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        let messages = db_query(req.db, "SELECT * FROM cs_messages WHERE session_id = ? ORDER BY id ASC", [id])
+        let messages = db_query(req.db, "SELECT * FROM cs_messages WHERE session_id=" + convert.toString(id) + " ORDER BY id ASC")
         let html = ""
         let i = 0
         while (i < arrays.length(messages)) {
@@ -305,8 +305,8 @@ fn p3_registerCSRoutes(router, db) {
         let id = convert.toInt(req.params.id)
         let data = json.parse(req.body)
         let content = p3_esc(data.content)
-        db_exec(req.db, "INSERT INTO cs_messages (session_id, sender_type, sender_id, content, created_at) VALUES (?, 'admin', 1, ?, datetime('now'))", [id, content])
-        db_exec(req.db, "UPDATE cs_sessions SET last_message = ?, last_message_at=datetime('now') WHERE id = ?", [content, id])
+        db_exec(req.db, "INSERT INTO cs_messages (session_id, sender_type, sender_id, content, created_at) VALUES (" + convert.toString(id) + ", 'admin', 1, '" + content + "', datetime('now'))")
+        db_exec(req.db, "UPDATE cs_sessions SET last_message='" + content + "', last_message_at=datetime('now') WHERE id=" + convert.toString(id))
         return res_redirect("/admin/cs/session/" + convert.toString(id))
     })
 
@@ -315,7 +315,7 @@ fn p3_registerCSRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE cs_sessions SET status='closed', closed_at=datetime('now') WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE cs_sessions SET status='closed', closed_at=datetime('now') WHERE id=" + convert.toString(id))
         return res_redirect("/admin/cs")
     })
 
@@ -324,12 +324,12 @@ fn p3_registerCSRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let userId = req.currentUser.id
-        let session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
+        let session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id=" + convert.toString(userId) + " AND status='open' ORDER BY id DESC LIMIT 1")
         if (session == null) {
-            db_exec(req.db, "INSERT INTO cs_sessions (user_id, status, last_message, last_message_at, created_at) VALUES (?, 'open', 'New session', datetime('now'), datetime('now'))", [userId])
-            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
+            db_exec(req.db, "INSERT INTO cs_sessions (user_id, status, last_message, last_message_at, created_at) VALUES (" + convert.toString(userId) + ", 'open', 'New session', datetime('now'), datetime('now'))")
+            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id=" + convert.toString(userId) + " AND status='open' ORDER BY id DESC LIMIT 1")
         }
-        let messages = db_query(req.db, "SELECT * FROM cs_messages WHERE session_id = ? ORDER BY id ASC", [session.id])
+        let messages = db_query(req.db, "SELECT * FROM cs_messages WHERE session_id=" + convert.toString(session.id) + " ORDER BY id ASC")
         let html = ""
         let i = 0
         while (i < arrays.length(messages)) {
@@ -352,13 +352,13 @@ fn p3_registerCSRoutes(router, db) {
         let userId = req.currentUser.id
         let data = json.parse(req.body)
         let content = p3_esc(data.content)
-        let session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
+        let session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id=" + convert.toString(userId) + " AND status='open' ORDER BY id DESC LIMIT 1")
         if (session == null) {
-            db_exec(req.db, "INSERT INTO cs_sessions (user_id, status, last_message, last_message_at, created_at) VALUES (?, 'open', ?, datetime('now'), datetime('now'))", [userId, content])
-            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
+            db_exec(req.db, "INSERT INTO cs_sessions (user_id, status, last_message, last_message_at, created_at) VALUES (" + convert.toString(userId) + ", 'open', '" + content + "', datetime('now'), datetime('now'))")
+            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id=" + convert.toString(userId) + " AND status='open' ORDER BY id DESC LIMIT 1")
         }
-        db_exec(req.db, "INSERT INTO cs_messages (session_id, sender_type, sender_id, content, created_at) VALUES (?, 'user', ?, ?, datetime('now'))", [session.id, userId, content])
-        db_exec(req.db, "UPDATE cs_sessions SET last_message = ?, last_message_at=datetime('now') WHERE id = ?", [content, session.id])
+        db_exec(req.db, "INSERT INTO cs_messages (session_id, sender_type, sender_id, content, created_at) VALUES (" + convert.toString(session.id) + ", 'user', " + convert.toString(userId) + ", '" + content + "', datetime('now'))")
+        db_exec(req.db, "UPDATE cs_sessions SET last_message='" + content + "', last_message_at=datetime('now') WHERE id=" + convert.toString(session.id))
         return res_redirect("/support")
     })
 }
@@ -401,11 +401,11 @@ fn p3_registerFinanceRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let merchantId = convert.toInt(req.params.merchantId)
-        let merchant = db_queryOne(req.db, "SELECT * FROM merchants WHERE id = ?", [merchantId])
+        let merchant = db_queryOne(req.db, "SELECT * FROM merchants WHERE id=" + convert.toString(merchantId))
         if (merchant == null) { return res_notFound("Merchant not found") }
         let amount = merchant.balance
-        db_exec(req.db, "UPDATE merchants SET balance = 0 WHERE id = ?", [merchantId])
-        db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES (?, 'expense', ?, ?, datetime('now'))", ['SETTLE_' + convert.toString(merchantId), amount, 'Merchant settlement for ' + p3_esc(merchant.name)])
+        db_exec(req.db, "UPDATE merchants SET balance=0 WHERE id=" + convert.toString(merchantId))
+        db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES ('SETTLE_" + convert.toString(merchantId) + "', 'expense', " + convert.toString(amount) + ", 'Merchant settlement for " + p3_esc(merchant.name) + "', datetime('now'))")
         return res_redirect("/admin/finance")
     })
 
@@ -417,7 +417,7 @@ fn p3_registerFinanceRoutes(router, db) {
         let data = json.parse(req.body)
         let amount = convert.toString(data.amount)
         let account = p3_esc(data.account)
-        db_exec(req.db, "INSERT INTO withdrawals (user_id, amount, account, status, created_at) VALUES (?, ?, ?, 'pending', datetime('now'))", [userId, amount, account])
+        db_exec(req.db, "INSERT INTO withdrawals (user_id, amount, account, status, created_at) VALUES (" + convert.toString(userId) + ", " + amount + ", '" + account + "', 'pending', datetime('now'))")
         return res_json({success: true, message: "Withdrawal request submitted"})
     })
 
@@ -450,7 +450,7 @@ fn p3_registerFinanceRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE withdrawals SET status='approved', approved_at=datetime('now') WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE withdrawals SET status='approved', approved_at=datetime('now') WHERE id=" + convert.toString(id))
         return res_redirect("/admin/withdrawals")
     })
 
@@ -459,7 +459,7 @@ fn p3_registerFinanceRoutes(router, db) {
         let authResult = p3_checkAdmin(req)
         if (authResult != null) { return authResult }
         let id = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE withdrawals SET status='rejected', rejected_at=datetime('now') WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE withdrawals SET status='rejected', rejected_at=datetime('now') WHERE id=" + convert.toString(id))
         return res_redirect("/admin/withdrawals")
     })
 }
@@ -472,7 +472,7 @@ fn p3_registerPaymentRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let orderId = convert.toInt(req.params.orderId)
-        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
+        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(orderId))
         if (order == null) { return res_notFound("Order not found") }
         let body = "<h1>Payment</h1><div class='card'><h3>Order #" + order.order_no + "</h3>" +
             "<p>Amount: <strong style='font-size:24px;color:#ff4d4f'>" + convert.toString(order.total_amount) + "</strong></p>" +
@@ -490,11 +490,11 @@ fn p3_registerPaymentRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let orderId = convert.toInt(req.params.orderId)
-        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
+        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(orderId))
         if (order == null) { return res_notFound("Order not found") }
-        db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='wechat' WHERE id = ?", [orderId])
-        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'wechat', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, 'WX' + convert.toString(time.now())])
-        db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES (?, 'income', ?, 'WeChat payment', datetime('now'))", [order.order_no, order.total_amount])
+        db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='wechat' WHERE id=" + convert.toString(orderId))
+        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (" + convert.toString(orderId) + ", 'wechat', " + convert.toString(order.total_amount) + ", 'success', 'WX" + convert.toString(time.now()) + "', datetime('now'))")
+        db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES ('" + order.order_no + "', 'income', " + convert.toString(order.total_amount) + ", 'WeChat payment', datetime('now'))")
         return res_redirect("/order/" + convert.toString(orderId))
     })
 
@@ -503,11 +503,11 @@ fn p3_registerPaymentRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let orderId = convert.toInt(req.params.orderId)
-        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
+        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(orderId))
         if (order == null) { return res_notFound("Order not found") }
-        db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='alipay' WHERE id = ?", [orderId])
-        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'alipay', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, 'ALI' + convert.toString(time.now())])
-        db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES (?, 'income', ?, 'Alipay payment', datetime('now'))", [order.order_no, order.total_amount])
+        db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='alipay' WHERE id=" + convert.toString(orderId))
+        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (" + convert.toString(orderId) + ", 'alipay', " + convert.toString(order.total_amount) + ", 'success', 'ALI" + convert.toString(time.now()) + "', datetime('now'))")
+        db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES ('" + order.order_no + "', 'income', " + convert.toString(order.total_amount) + ", 'Alipay payment', datetime('now'))")
         return res_redirect("/order/" + convert.toString(orderId))
     })
 
@@ -516,10 +516,10 @@ fn p3_registerPaymentRoutes(router, db) {
         let authResult = p3_checkUser(req)
         if (authResult != null) { return authResult }
         let orderId = convert.toInt(req.params.orderId)
-        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
+        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(orderId))
         if (order == null) { return res_notFound("Order not found") }
-        db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='balance' WHERE id = ?", [orderId])
-        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'balance', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, 'BAL' + convert.toString(time.now())])
+        db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='balance' WHERE id=" + convert.toString(orderId))
+        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (" + convert.toString(orderId) + ", 'balance', " + convert.toString(order.total_amount) + ", 'success', 'BAL" + convert.toString(time.now()) + "', datetime('now'))")
         return res_redirect("/order/" + convert.toString(orderId))
     })
 
@@ -551,7 +551,7 @@ fn p3_registerPaymentRoutes(router, db) {
         let data = json.parse(req.body)
         let paymentId = convert.toString(data.payment_id)
         let amount = convert.toString(data.amount)
-        db_exec(req.db, "UPDATE payments SET status='refunded' WHERE id = ?", [paymentId])
+        db_exec(req.db, "UPDATE payments SET status='refunded' WHERE id=" + paymentId)
         return res_json({success: true, message: "Refund processed"})
     })
 }
