@@ -14,10 +14,10 @@ fn us_couponsPage(req) {
     let db = req.db
     us_ensureTables(db)
     let tab = req_getQuery(req, "tab", "unused")
-    let statusCond = "status='unused'"
-    if (tab == "used") { statusCond = "status='used'" }
-    if (tab == "expired") { statusCond = "status='expired'" }
-    let coupons = db_query(db, "SELECT uc.*, c.name, c.discount_type, c.discount_value, c.min_amount, c.valid_from, c.valid_to FROM user_coupons uc LEFT JOIN coupons c ON uc.coupon_id=c.id WHERE uc.user_id=" + convert.toString(currentUser.id) + " AND " + statusCond + " ORDER BY uc.created_at DESC LIMIT 50")
+    let statusVal = "unused"
+    if (tab == "used") { statusVal = "used" }
+    if (tab == "expired") { statusVal = "expired" }
+    let coupons = db_query(db, "SELECT uc.*, c.name, c.discount_type, c.discount_value, c.min_amount, c.valid_from, c.valid_to FROM user_coupons uc LEFT JOIN coupons c ON uc.coupon_id=c.id WHERE uc.user_id = ? AND status = ? ORDER BY uc.created_at DESC LIMIT 50", [currentUser.id, statusVal])
     let html = "<div class='us-tabs'>" +
         "<div class='us-tab " + us_tabClass(tab, "unused") + "' onclick=\"location.href='/user/coupons?tab=unused'\">未使用</div>" +
         "<div class='us-tab " + us_tabClass(tab, "used") + "' onclick=\"location.href='/user/coupons?tab=used'\">已使用</div>" +
@@ -49,7 +49,7 @@ fn us_collectionsPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let collections = db_query(db, "SELECT uc.*, p.name, p.price, p.main_image, p.status FROM user_collections uc LEFT JOIN products p ON uc.product_id=p.id WHERE uc.user_id=" + convert.toString(currentUser.id) + " ORDER BY uc.created_at DESC LIMIT 50")
+    let collections = db_query(db, "SELECT uc.*, p.name, p.price, p.main_image, p.status FROM user_collections uc LEFT JOIN products p ON uc.product_id=p.id WHERE uc.user_id = ? ORDER BY uc.created_at DESC LIMIT 50", [currentUser.id])
     let html = ""
     if (arrays.length(collections) == 0) {
         html = "<div class='us-empty'><div class='us-empty-icon'>❤️</div><div class='us-empty-text'>暂无收藏商品</div><a href='/' class='us-btn'>去逛逛</a></div>"
@@ -80,10 +80,10 @@ fn us_pointsPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let userInfo = db_queryOne(db, "SELECT points FROM users WHERE id=" + convert.toString(currentUser.id))
+    let userInfo = db_queryOne(db, "SELECT points FROM users WHERE id = ?", [currentUser.id])
     let totalPoints = 0
     if (userInfo != null && userInfo.points != null) { totalPoints = userInfo.points }
-    let logs = db_query(db, "SELECT * FROM point_logs WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at DESC LIMIT 50")
+    let logs = db_query(db, "SELECT * FROM point_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", [currentUser.id])
     let html = "<div class='us-stat-row'><div class='us-stat-item'><div class='us-stat-num'>" + convert.toString(totalPoints) + "</div><div class='us-stat-label'>当前积分</div></div><div class='us-stat-item'><div class='us-stat-num'>100</div><div class='us-stat-label'>可抵现金(元)</div></div><div class='us-stat-item'><div class='us-stat-num'>1</div><div class='us-stat-label'>积分=1分</div></div></div>"
     if (arrays.length(logs) == 0) {
         html = html + "<div class='us-empty'><div class='us-empty-icon'>✨</div><div class='us-empty-text'>暂无积分记录</div></div>"
@@ -109,10 +109,10 @@ fn us_balancePage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let userInfo = db_queryOne(db, "SELECT balance FROM users WHERE id=" + convert.toString(currentUser.id))
+    let userInfo = db_queryOne(db, "SELECT balance FROM users WHERE id = ?", [currentUser.id])
     let totalBalance = 0.0
     if (userInfo != null && userInfo.balance != null) { totalBalance = userInfo.balance }
-    let logs = db_query(db, "SELECT * FROM account_logs WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at DESC LIMIT 50")
+    let logs = db_query(db, "SELECT * FROM account_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", [currentUser.id])
     let html = "<div class='us-stat-row'><div class='us-stat-item'><div class='us-stat-num'>¥" + convert.toString(totalBalance) + "</div><div class='us-stat-label'>账户余额</div></div><div class='us-stat-item'><div class='us-stat-num'>💳</div><div class='us-stat-label'>充值</div></div><div class='us-stat-item'><div class='us-stat-num'>🎁</div><div class='us-stat-label'>提现</div></div></div>"
     if (arrays.length(logs) == 0) {
         html = html + "<div class='us-empty'><div class='us-empty-icon'>💳</div><div class='us-empty-text'>暂无余额变动记录</div></div>"
@@ -138,7 +138,7 @@ fn us_verifyPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let userInfo = db_queryOne(db, "SELECT real_name, id_card, verified FROM users WHERE id=" + convert.toString(currentUser.id))
+    let userInfo = db_queryOne(db, "SELECT real_name, id_card, verified FROM users WHERE id = ?", [currentUser.id])
     let verified = 0
     let realName = ""
     let idCard = ""
@@ -169,7 +169,7 @@ fn us_verifySubmit(req) {
     if (currentUser == null) { return res_json({success: false, error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
     let db = req.db
-    db_exec(db, "UPDATE users SET real_name='" + body.real_name + "', id_card='" + body.id_card + "', verified=2 WHERE id=" + convert.toString(currentUser.id))
+    db_exec(db, "UPDATE users SET real_name = ?, id_card = ?, verified = 2 WHERE id = ?", [body.real_name, body.id_card, currentUser.id])
     return res_json({success: true})
 }
 
@@ -179,7 +179,7 @@ fn us_securityPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let userInfo = db_queryOne(db, "SELECT phone, email, verified FROM users WHERE id=" + convert.toString(currentUser.id))
+    let userInfo = db_queryOne(db, "SELECT phone, email, verified FROM users WHERE id = ?", [currentUser.id])
     let phone = "未绑定"
     let email = "未绑定"
     let verified = 0
@@ -218,10 +218,10 @@ fn us_passwordSubmit(req) {
     if (currentUser == null) { return res_json({success: false, error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
     let db = req.db
-    let userInfo = db_queryOne(db, "SELECT password_hash FROM users WHERE id=" + convert.toString(currentUser.id))
+    let userInfo = db_queryOne(db, "SELECT password_hash FROM users WHERE id = ?", [currentUser.id])
     if (userInfo == null) { return res_json({success: false, error: "用户不存在"}, 404) }
     if (!verify_password(body.old_password, userInfo.password_hash)) { return res_json({success: false, error: "原密码错误"}, 400) }
     let newHash = hash_password(body.new_password)
-    db_exec(db, "UPDATE users SET password_hash='" + newHash + "' WHERE id=" + convert.toString(currentUser.id))
+    db_exec(db, "UPDATE users SET password_hash = ? WHERE id = ?", [newHash, currentUser.id])
     return res_json({success: true})
 }
