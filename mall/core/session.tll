@@ -9,6 +9,27 @@ from "./database" import db_get, db_release, db_exec, db_query, db_queryOne
 
 let _sessionCounter = 0
 
+// NOTE: _sessionCounter is retained for legacy Cache TTL usage only.
+// It MUST NOT be used as a security source for Session ID generation.
+// Cache TTL using _sessionCounter is a known non-security bug (counter != timestamp),
+// recorded for future fix, outside P1 scope.
+
+// Convert byte array to hex string (helper for CSPRNG session ID)
+fn _sessionBytesToHex(bytes) {
+    let hexChars = "0123456789abcdef"
+    let hex = ""
+    let i = 0
+    let len = arrays.length(bytes)
+    while (i < len) {
+        let b = bytes[i]
+        let high = convert.toInt(b / 16)
+        let low = b % 16
+        hex = hex + strings.charAt(hexChars, high) + strings.charAt(hexChars, low)
+        i = i + 1
+    }
+    return hex
+}
+
 // Initialize session tables
 fn session_initTables(db) {
     db_exec(db, "CREATE TABLE IF NOT EXISTS session_data (
@@ -24,12 +45,16 @@ fn session_initTables(db) {
     return {success: true}
 }
 
-// Generate a random session ID
+// Generate a cryptographically secure random session ID
+// P1: Replaces predictable _sessionCounter scheme with TLL OS sealed CSPRNG
+// Uses crypto.randomBytes(32) -> 256 bits entropy -> 64 hex chars
+// Format: sess_<64-hex-chars> (Cookie-safe, no dangerous characters)
 fn session_generateId() {
-    _sessionCounter = _sessionCounter + 1
-    let cnt = convert.toString(_sessionCounter)
-    let raw = "sess-" + cnt + "-" + strings.length(cnt) + "-tll"
-    return raw
+    // Use TLL OS sealed CSPRNG (formal API: crypto.randomBytes)
+    // Platform backend: Windows BCryptGenRandom / Linux getrandom() / macOS /dev/urandom
+    let bytes = crypto.randomBytes(32)
+    let hex = _sessionBytesToHex(bytes)
+    return "sess_" + hex
 }
 
 // Create a new session, returns session ID

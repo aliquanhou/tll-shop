@@ -2,7 +2,7 @@ name: TLL Shop CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'feature/*']
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
@@ -224,6 +224,42 @@ jobs:
           echo ""
           echo "=== User modules ==="
           ls mall/modules/*.tll
+
+      - name: Run P1 Session CSPRNG Test
+        shell: bash
+        run: |
+          echo "=== P1 Session CSPRNG Security Test ==="
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            TLLVM="tllos/host/c/tllvm.exe"
+          else
+            TLLVM="tllos/host/c/tllvm"
+          fi
+          TLLC="tllos/${{ env.TLLC_PATH }}"
+
+          # Compile P1 test
+          echo "Compiling P1 test..."
+          "$TLLVM" "$TLLC" compile tests/P1-session-csprng-test.tll -o tests/P1-session-csprng-test.tllbc
+          TEST_COMPILE_RESULT=$?
+          if [ $TEST_COMPILE_RESULT -ne 0 ]; then
+            echo "❌ FAIL: P1 test compilation failed"
+            exit 1
+          fi
+          if [ ! -f tests/P1-session-csprng-test.tllbc ]; then
+            echo "❌ FAIL: P1 test output not created"
+            exit 1
+          fi
+
+          # Run P1 test
+          echo "Running P1 test..."
+          "$TLLVM" tests/P1-session-csprng-test.tllbc
+          TEST_RESULT=$?
+          echo ""
+          echo "P1 test exit code: $TEST_RESULT"
+          if [ $TEST_RESULT -ne 0 ]; then
+            echo "❌ FAIL: P1 Session CSPRNG test failed"
+            exit 1
+          fi
+          echo "✅ P1 Session CSPRNG test passed"
 
       - name: Check for SQL injection patterns (informational)
         shell: bash
