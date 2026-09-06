@@ -1,0 +1,184 @@
+// P1 Session CSPRNG Test
+// Verifies session ID generation uses TLL OS sealed CSPRNG (crypto.randomBytes)
+// and is unpredictable, replacing the old _sessionCounter predictable scheme.
+
+from "../mall/core/session" import session_generateId, session_create, session_set, session_get, session_destroy, session_exists, session_initTables
+from "../mall/core/database" import db_init, db_get, db_release
+
+fn test_format() {
+    io.println("=== Gate 1: Session ID format ===")
+    let id = session_generateId()
+    io.println("Sample ID: " + id)
+    io.println("Length: " + convert.toString(strings.length(id)))
+
+    let pass = 0
+
+    // Must start with sess_ prefix
+    if (strings.startsWith(id, "sess_")) {
+        io.println("  PASS: prefix 'sess_'")
+        pass = pass + 1
+    } else {
+        io.println("  FAIL: prefix incorrect")
+    }
+
+    // Expected length: "sess_" (5) + 64 hex chars = 69
+    if (strings.length(id) == 69) {
+        io.println("  PASS: length 69 (5 prefix + 64 hex)")
+        pass = pass + 1
+    } else {
+        io.println("  FAIL: length " + convert.toString(strings.length(id)))
+    }
+
+    // Must NOT contain dash (old format: sess-1-1-tll)
+    let hasDash = false
+    let i = 0
+    while (i < strings.length(id)) {
+        if (strings.charAt(id, i) == "-") { hasDash = true }
+        i = i + 1
+    }
+    if (!hasDash) {
+        io.println("  PASS: no dash separator (old format used dashes)")
+        pass = pass + 1
+    } else {
+        io.println("  FAIL: contains dash (may be old predictable format)")
+    }
+
+    return pass
+}
+
+fn test_uniqueness() {
+    io.println("")
+    io.println("=== Gate 2: 100 unique session IDs ===")
+    let seen = {}
+    let allUnique = true
+    let i = 0
+    while (i < 100) {
+        let id = session_generateId()
+        if (seen[id] != null) {
+            io.println("  FAIL: duplicate at index " + convert.toString(i))
+            allUnique = false
+            break
+        }
+        seen[id] = true
+        i = i + 1
+    }
+    if (allUnique) {
+        io.println("  PASS: all 100 IDs unique")
+        return 1
+    }
+    return 0
+}
+
+fn test_no_counter_pattern() {
+    io.println("")
+    io.println("=== Gate 3: No counter/sequential pattern ===")
+    let a = session_generateId()
+    let b = session_generateId()
+    let c = session_generateId()
+    io.println("  A: " + a)
+    io.println("  B: " + b)
+    io.println("  C: " + c)
+
+    // Old format would be sess-1-1-tll, sess-2-1-tll, sess-3-1-tll
+    // New format is sess_<64-hex>
+    // Verify the hex part is not sequential by checking first 10 chars differ
+    let hexA = strings.substring(a, 5, 15)
+    let hexB = strings.substring(b, 5, 15)
+    let hexC = strings.substring(c, 5, 15)
+
+    if (hexA != hexB && hexB != hexC && hexA != hexC) {
+        io.println("  PASS: first 10 hex chars differ across IDs")
+        return 1
+    } else {
+        io.println("  FAIL: hex prefix appears sequential")
+        return 0
+    }
+}
+
+fn test_lifecycle() {
+    io.println("")
+    io.println("=== Gate 4: Session lifecycle ===")
+    let pass = 0
+
+    let sid = session_create()
+    io.println("  Created session: " + sid)
+
+    session_set(sid, "userId", "42")
+    session_set(sid, "username", "testuser")
+    session_set(sid, "role", "admin")
+
+    let data = session_get(sid)
+    if (data != null) {
+        io.println("  PASS: session data retrieved")
+        io.println("    userId=" + data.userId + " username=" + data.username + " role=" + data.role)
+        pass = pass + 1
+    } else {
+        io.println("  FAIL: session data is null")
+    }
+
+    if (session_exists(sid)) {
+        io.println("  PASS: session exists before destroy")
+        pass = pass + 1
+    } else {
+        io.println("  FAIL: session does not exist before destroy")
+    }
+
+    session_destroy(sid)
+
+    if (!session_exists(sid)) {
+        io.println("  PASS: session destroyed successfully")
+        pass = pass + 1
+    } else {
+        io.println("  FAIL: session still exists after destroy")
+    }
+
+    return pass
+}
+
+fn main() {
+    io.println("========================================")
+    io.println("P1 Session CSPRNG Security Test")
+    io.println("========================================")
+
+    // Initialize database
+    db_init("test_p1_session.db")
+    let db = db_get()
+    session_initTables(db)
+    db_release(db)
+
+    let totalPass = 0
+    let totalFail = 0
+
+    let p1 = test_format()
+    totalPass = totalPass + p1
+    totalFail = totalFail + (3 - p1)
+
+    let p2 = test_uniqueness()
+    totalPass = totalPass + p2
+    totalFail = totalFail + (1 - p2)
+
+    let p3 = test_no_counter_pattern()
+    totalPass = totalPass + p3
+    totalFail = totalFail + (1 - p3)
+
+    let p4 = test_lifecycle()
+    totalPass = totalPass + p4
+    totalFail = totalFail + (3 - p4)
+
+    io.println("")
+    io.println("========================================")
+    io.println("P1 Test Summary")
+    io.println("  Passed: " + convert.toString(totalPass))
+    io.println("  Failed: " + convert.toString(totalFail))
+    io.println("========================================")
+
+    if (totalFail > 0) {
+        io.println("RESULT: P1 TEST FAILED")
+        return 1
+    } else {
+        io.println("RESULT: P1 TEST PASSED")
+        return 0
+    }
+}
+
+main()
