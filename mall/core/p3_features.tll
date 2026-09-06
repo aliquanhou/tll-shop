@@ -225,7 +225,7 @@ fn p3_registerDistributionRoutes(router, db) {
         let distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id = ?", [userId])
         if (distributor == null) {
             db_exec(req.db, "INSERT INTO distributors (user_id, level, total_commission, balance, created_at) VALUES (?, 1, 0, 0, datetime('now'))", [userId])
-            distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id=" + convert.toString(userId))
+            distributor = db_queryOne(req.db, "SELECT * FROM distributors WHERE user_id = ?", [userId])
         }
         let orders = db_query(req.db, "SELECT * FROM distribution_orders WHERE distributor_id = ? ORDER BY id DESC LIMIT 20", [distributor.id])
         let orderHtml = ""
@@ -327,7 +327,7 @@ fn p3_registerCSRoutes(router, db) {
         let session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
         if (session == null) {
             db_exec(req.db, "INSERT INTO cs_sessions (user_id, status, last_message, last_message_at, created_at) VALUES (?, 'open', 'New session', datetime('now'), datetime('now'))", [userId])
-            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id=" + convert.toString(userId) + " AND status='open' ORDER BY id DESC LIMIT 1")
+            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
         }
         let messages = db_query(req.db, "SELECT * FROM cs_messages WHERE session_id = ? ORDER BY id ASC", [session.id])
         let html = ""
@@ -355,7 +355,7 @@ fn p3_registerCSRoutes(router, db) {
         let session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
         if (session == null) {
             db_exec(req.db, "INSERT INTO cs_sessions (user_id, status, last_message, last_message_at, created_at) VALUES (?, 'open', ?, datetime('now'), datetime('now'))", [userId, content])
-            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id=" + convert.toString(userId) + " AND status='open' ORDER BY id DESC LIMIT 1")
+            session = db_queryOne(req.db, "SELECT * FROM cs_sessions WHERE user_id = ? AND status='open' ORDER BY id DESC LIMIT 1", [userId])
         }
         db_exec(req.db, "INSERT INTO cs_messages (session_id, sender_type, sender_id, content, created_at) VALUES (?, 'user', ?, ?, datetime('now'))", [session.id, userId, content])
         db_exec(req.db, "UPDATE cs_sessions SET last_message = ?, last_message_at=datetime('now') WHERE id = ?", [content, session.id])
