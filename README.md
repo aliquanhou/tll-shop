@@ -40,16 +40,17 @@ TLL Shop 不是 Demo，而是 TLL OS 的真实商业产品施工现场。
 
 ## TLL 依赖版本
 
-当前 Shop 依赖的 TLL 工具链版本：
+当前 Shop 依赖的 TLL 工具链版本（CI 固定使用，禁止随 develop 漂移）：
 
 | 组件 | 版本 | Commit | SHA256 |
 |------|------|--------|--------|
+| TLL OS (CI 固定) | main 稳定基线 | 6875401 | - |
 | TLL Compiler | tllc-v1.0.0-rc1 | 364b9c5 | 36A5A20EB1124D2F40ED0051357D06DD976E488489DF61D652140FEFC556A845 |
 | TLL Runtime (Windows) | tllvm.exe | - | - |
 | TLL Runtime (Linux) | tllvm | - | - |
 | Bootstrap Compiler | compiler.tllbc | - | 38825F1487D713B70793049427809F5D376F3586870C38D6CE008D07AED23677 |
 
-详细信息见 `TLL-TOOLCHAIN-VERSION.md`。
+**CI 工具链固定策略**：Shop CI 固定 checkout TLL OS commit `6875401`，并验证 Compiler SHA256。工具链缺失时 CI FAIL，禁止静默跳过。详细信息见 `TLL-TOOLCHAIN-VERSION.md`。
 
 ## 已封板能力（来自 TLL OS）
 
