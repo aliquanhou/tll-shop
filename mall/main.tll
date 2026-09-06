@@ -1,4 +1,4 @@
-// TLL Mall - Main Entry
+﻿// TLL Mall - Main Entry
 // Commercial-grade B2C mall built entirely in TLL
 
 from "./core/database" import db_open, db_close, db_exec, db_query, db_queryOne, db_insert, db_begin, db_commit, db_rollback, db_get, db_release
@@ -589,6 +589,12 @@ router_post(mallRouter, "/order/pay", fn(req) {
     if (order.status != "pending") { return res_json({error: "订单状态不正确"}, 400) }
     db_exec(req.db, "UPDATE orders SET status='paid', payment_status='paid', paid_at=datetime('now') WHERE id=" + convert.toString(body.order_id))
     return res_json({success: true})
+})
+
+
+// --- CSRF Token API ---
+router_get(mallRouter, "/csrf/token", fn(req) {
+    return csrf_getTokenHandler(req)
 })
 
 // --- Login Page ---
