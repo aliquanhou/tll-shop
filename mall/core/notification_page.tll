@@ -1,7 +1,8 @@
-// TLL Mall - Notification Page (minimal version for CI diagnosis)
+// TLL Mall - Notification Page (minimal + unread count)
 
 from "./router" import router_get, res_html, res_redirect
 from "./auth" import auth_currentUser, cookie_getSessionId
+from "./notification" import notification_getUnreadCount
 
 fn notification_checkAuth(req) {
     let sessionId = cookie_getSessionId(req)
@@ -17,6 +18,7 @@ fn notification_registerRoutes(router) {
     router_get(router, "/notifications", fn(req) {
         let authResult = notification_checkAuth(req)
         if (authResult != null) { return authResult }
-        return res_html("<html><body><h1>Notifications</h1></body></html>")
+        let unread = notification_getUnreadCount(req.db, req.currentUser.id)
+        return res_html("<html><body><h1>Notifications</h1><p>Unread: " + convert.toString(unread) + "</p></body></html>")
     })
 }
