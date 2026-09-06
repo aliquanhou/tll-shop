@@ -2,7 +2,7 @@
 // 积分发行、申请、审批、消费、退款、账本
 // 完整商业闭环：用户申请 -> 老板审批 -> 积分入账 -> 购物支付 -> 退款返还
 
-from "./database" import db_get, db_release, db_exec, db_query, db_queryOne, db_begin, db_commit, db_rollback
+from "./database" import db_get, db_release, db_exec, db_query, db_queryOne, db_begin, db_commit, db_rollback, db_insert
 
 // === Database Tables ===
 
