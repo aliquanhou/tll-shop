@@ -42,27 +42,27 @@ fn auth_register(db, username, password, email) {
         return {error: "Password must be at least 6 characters"}
     }
 
-    // Check if username exists
-    let existing = db_queryOne(db, "SELECT id FROM users WHERE username = '" + username + "'")
+    // Check if username exists (parameterized to prevent SQL injection)
+    let existing = db_queryOne(db, "SELECT id FROM users WHERE username = ?", [username])
     if (existing != null) {
         return {error: "Username already exists"}
     }
 
-    // Check if email exists
+    // Check if email exists (parameterized)
     if (email != null && strings.length(email) > 0) {
-        let existingEmail = db_queryOne(db, "SELECT id FROM users WHERE email = '" + email + "'")
+        let existingEmail = db_queryOne(db, "SELECT id FROM users WHERE email = ?", [email])
         if (existingEmail != null) {
             return {error: "Email already exists"}
         }
     }
 
-    // Create user
+    // Create user (parameterized)
     let hash = hash_password(password)
-    let emailVal = "NULL"
+    let emailVal = null
     if (email != null && strings.length(email) > 0) {
-        emailVal = "'" + email + "'"
+        emailVal = email
     }
-    let userId = db_insert(db, "INSERT INTO users (username, email, password_hash, role) VALUES ('" + username + "', " + emailVal + ", '" + hash + "', 'user')")
+    let userId = db_insert(db, "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'user')", [username, emailVal, hash])
 
     return {success: true, userId: userId, username: username}
 }
@@ -73,7 +73,8 @@ fn auth_login(db, username, password) {
         return {error: "Username and password required"}
     }
 
-    let user = db_queryOne(db, "SELECT * FROM users WHERE username = '" + username + "'")
+    // Parameterized query to prevent SQL injection
+    let user = db_queryOne(db, "SELECT * FROM users WHERE username = ?", [username])
     if (user == null) {
         return {error: "Invalid username or password"}
     }
@@ -86,10 +87,10 @@ fn auth_login(db, username, password) {
         return {error: "Invalid username or password"}
     }
 
-    // Auto-migrate legacy password hash to bcrypt
+    // Auto-migrate legacy password hash to bcrypt (parameterized)
     if (needs_password_rehash(user.password_hash)) {
         let newHash = hash_password(password)
-        db_exec(db, "UPDATE users SET password_hash = '" + newHash + "' WHERE id = " + convert.toString(user.id))
+        db_exec(db, "UPDATE users SET password_hash = ? WHERE id = ?", [newHash, user.id])
     }
 
     // Create session
@@ -194,11 +195,12 @@ fn cookie_getSessionId(req) {
 
 // === Create Default Admin ===
 fn auth_createAdmin(db, username, password, email) {
-    let existing = db_queryOne(db, "SELECT id FROM users WHERE username = '" + username + "'")
+    // Parameterized query
+    let existing = db_queryOne(db, "SELECT id FROM users WHERE username = ?", [username])
     if (existing != null) {
         return {skipped: true, message: "Admin already exists"}
     }
     let hash = hash_password(password)
-    let userId = db_insert(db, "INSERT INTO users (username, email, password_hash, role) VALUES ('" + username + "', '" + email + "', '" + hash + "', 'admin')")
+    let userId = db_insert(db, "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'admin')", [username, email, hash])
     return {success: true, adminId: userId}
 }
