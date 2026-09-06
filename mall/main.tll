@@ -180,16 +180,16 @@ router_get(mallRouter, "/product/:id", fn(req) {
     let sessionId = cookie_getSessionId(req)
     let currentUser = auth_currentUser(sessionId)
     let productId = convert.toInt(req.params.id)
-    let product = db_queryOne(req.db, "SELECT * FROM products WHERE id=" + convert.toString(productId))
+    let product = db_queryOne(req.db, "SELECT * FROM products WHERE id = ?", [productId])
     if (product == null) { return res_notFound("商品不存在") }
 
-    let skus = db_query(req.db, "SELECT * FROM product_skus WHERE product_id=" + convert.toString(productId))
+    let skus = db_query(req.db, "SELECT * FROM product_skus WHERE product_id = ?", [productId])
     let skuHtml = ""
     if (arrays.length(skus) > 0) {
-        skuHtml = "<div class='form-group'><label>规格选择</label><select id='skuSelect' onchange='updatePrice()'>"
+        skuHtml = "<div class='form-group'><label>规格选择</label><select id='skuSelect' onchange='updateSku()'>"
         let i = 0
         while (i < arrays.length(skus)) {
-            skuHtml = skuHtml + "<option value='" + convert.toString(skus[i].id) + "' data-price='" + convert.toString(skus[i].price) + "'>" + skus[i].spec + " - ¥" + convert.toString(skus[i].price) + " (库存:" + convert.toString(skus[i].stock) + ")</option>"
+            skuHtml = skuHtml + "<option value='" + convert.toString(skus[i].id) + "' data-price='" + convert.toString(skus[i].price) + "' data-stock='" + convert.toString(skus[i].stock) + "'>" + skus[i].spec + " - ¥" + convert.toString(skus[i].price) + " (库存:" + convert.toString(skus[i].stock) + ")</option>"
             i = i + 1
         }
         skuHtml = skuHtml + "</select></div>"
@@ -212,7 +212,7 @@ router_get(mallRouter, "/product/:id", fn(req) {
         "</div></div></div>" +
         "<div class='card'><h3>商品详情</h3><p style='color:#666;line-height:1.8'>" + product.detail + "</p></div>" +
         "</div>" +
-        "<script>function updatePrice(){let s=document.getElementById('skuSelect');let opt=s.options[s.selectedIndex];document.getElementById('priceDisplay').textContent='¥'+opt.dataset.price;}" +
+        "<script>function updateSku(){let s=document.getElementById('skuSelect');if(!s)return;let opt=s.options[s.selectedIndex];document.getElementById('priceDisplay').textContent='¥'+opt.dataset.price;if(opt.dataset.stock){document.getElementById('stockDisplay').textContent=opt.dataset.stock;document.getElementById('quantity').max=opt.dataset.stock;}}" +
         "function addToCart(){let skuId=document.getElementById('skuSelect')?document.getElementById('skuSelect').value:'';let qty=document.getElementById('quantity').value;" +
         "fetch('/cart/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:" + convert.toString(product.id) + ",sku_id:skuId,quantity:parseInt(qty)})}).then(r=>r.json()).then(d=>{if(d.success){alert('已加入购物车');}else{alert(d.error);}});}" +
         "function buyNow(){addToCart();setTimeout(()=>{location.href='/cart';},500);}</script>"
