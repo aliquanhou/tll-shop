@@ -4,6 +4,7 @@
 from "./database" import db_exec, db_query, db_queryOne, db_insert
 from "./router" import router_get, router_post, router_put, router_delete, res_json, res_notFound
 from "./auth" import auth_currentUser, cookie_getSessionId
+from "./analytics" import analytics_getOverview, analytics_getSalesTrend, analytics_getOrderDistribution, analytics_getTopProducts, analytics_getRecentOrders, analytics_getLowStockProducts, analytics_getPaymentDistribution, analytics_getUserGrowth
 
 // === API Response Helpers ===
 fn api_success(data, message) {
@@ -1072,27 +1073,69 @@ fn api_registerMerchantRoutes(router) {
 // 17. Dashboard Statistics API
 // ============================================
 fn api_registerDashboardRoutes(router) {
+    // Overview statistics
     router_get(router, "/api/admin/dashboard/stats", fn(req) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
-        let totalProducts = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM products")
-        let totalOrders = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM orders")
-        let totalUsers = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM users")
-        let totalMerchants = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM merchants")
-        let totalSales = db_queryOne(req.db, "SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status IN ('paid','shipped','completed')")
-        let pendingOrders = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM orders WHERE status='pending'")
-        let pendingShip = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM orders WHERE status='paid'")
-        let pendingAftersale = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM after_sales WHERE status='pending'")
-        return api_success({
-            totalProducts: totalProducts.cnt,
-            totalOrders: totalOrders.cnt,
-            totalUsers: totalUsers.cnt,
-            totalMerchants: totalMerchants.cnt,
-            totalSales: totalSales.total,
-            pendingOrders: pendingOrders.cnt,
-            pendingShip: pendingShip.cnt,
-            pendingAftersale: pendingAftersale.cnt
-        }, "Dashboard statistics")
+        let overview = analytics_getOverview(req.db)
+        return api_success(overview, "Dashboard statistics")
+    })
+
+    // Sales trend
+    router_get(router, "/api/admin/dashboard/sales-trend", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let days = 7
+        let trend = analytics_getSalesTrend(req.db, days)
+        return api_success(trend, "Sales trend")
+    })
+
+    // Order distribution
+    router_get(router, "/api/admin/dashboard/order-distribution", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let dist = analytics_getOrderDistribution(req.db)
+        return api_success(dist, "Order distribution")
+    })
+
+    // Top products
+    router_get(router, "/api/admin/dashboard/top-products", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let products = analytics_getTopProducts(req.db, 5)
+        return api_success(products, "Top products")
+    })
+
+    // Recent orders
+    router_get(router, "/api/admin/dashboard/recent-orders", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let orders = analytics_getRecentOrders(req.db, 10)
+        return api_success(orders, "Recent orders")
+    })
+
+    // Low stock products
+    router_get(router, "/api/admin/dashboard/low-stock", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let products = analytics_getLowStockProducts(req.db, 10)
+        return api_success(products, "Low stock products")
+    })
+
+    // Payment distribution
+    router_get(router, "/api/admin/dashboard/payment-distribution", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let dist = analytics_getPaymentDistribution(req.db)
+        return api_success(dist, "Payment distribution")
+    })
+
+    // User growth
+    router_get(router, "/api/admin/dashboard/user-growth", fn(req) {
+        let auth = api_checkAdmin(req)
+        if (auth != null) { return auth }
+        let growth = analytics_getUserGrowth(req.db, 7)
+        return api_success(growth, "User growth")
     })
 }
 
