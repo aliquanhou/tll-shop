@@ -16,6 +16,8 @@ from "./core/admin_new_modules" import new_modules_registerAll
 from "./core/admin_missing_pages" import admin_missing_registerAll
 from "./core/admin_api" import api_registerAll
 from "./core/admin_dashboard" import dashboard_registerRoutes
+from "./core/notification" import notification_send, notification_getUnreadCount
+from "./core/notification_page" import notification_registerRoutes
 from "./core/payment" import payment_registerAll, payment_initTables
 from "./core/icp" import icp_registerAll, icp_initTables
 from "./core/agreement" import agreement_registerAll, agreement_initTables
@@ -690,6 +692,7 @@ p4_registerAll(mallRouter, db)
 new_modules_registerAll(mallRouter)
 api_registerAll(mallRouter)
 dashboard_registerRoutes(mallRouter)
+notification_registerRoutes(mallRouter)
 payment_registerAll(mallRouter)
 icp_registerAll(mallRouter)
 agreement_registerAll(mallRouter)

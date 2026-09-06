@@ -1,0 +1,22 @@
+// TLL Mall - Notification Page (minimal version for CI diagnosis)
+
+from "./router" import router_get, res_html, res_redirect
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn notification_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn notification_registerRoutes(router) {
+    router_get(router, "/notifications", fn(req) {
+        let authResult = notification_checkAuth(req)
+        if (authResult != null) { return authResult }
+        return res_html("<html><body><h1>Notifications</h1></body></html>")
+    })
+}
