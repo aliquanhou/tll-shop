@@ -22,6 +22,9 @@ from "./core/invoice" import invoice_registerAll, invoice_initTables
 from "./core/search" import search_registerAll, search_initTables
 from "./modules/user_center" import uc_registerAll
 from "./modules/user_services" import us_registerAll
+from "./core/points" import points_initTables, points_getWallet, points_getBalance, points_apply, points_approve, points_reject, points_listApplications, points_getLedger, points_adminAdjust, points_getSettings, points_updateSetting, points_getStats
+from "./core/points_routes" import points_registerRoutes
+
 
 // === HTML Templates ===
 
@@ -68,6 +71,9 @@ icp_initTables(db)
 agreement_initTables(db)
 invoice_initTables(db)
 search_initTables(db)
+points_initTables(db)
+io.println("Points system initialized")
+
 io.println("Schema initialized (20 tables)")
 
 schema_seedData(db)
@@ -688,6 +694,7 @@ invoice_registerAll(mallRouter)
 search_registerAll(mallRouter)
 uc_registerAll(mallRouter)
 us_registerAll(mallRouter)
+points_registerRoutes(mallRouter, html_page, html_header)
 io.println("Routes registered (basic + extended + marketing + p3 + p4 + new 5 modules + RESTful API + user center + 13 user services = 17 modules with full CRUD)")
 
 // === Start Server ===
