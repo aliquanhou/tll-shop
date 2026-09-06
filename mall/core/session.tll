@@ -62,7 +62,7 @@ fn session_create() {
     let id = session_generateId()
     // Insert a placeholder record to mark session as existing
     let db = db_get()
-    db_exec(db, "INSERT INTO session_data (session_id, key, value) VALUES ('" + id + "', '__created__', '1')")
+    db_exec(db, "INSERT INTO session_data (session_id, key, value) VALUES (?, '__created__', '1')", [id])
     db_release(db)
     return id
 }
@@ -71,7 +71,7 @@ fn session_create() {
 fn session_get(id) {
     if (id == null) { return null }
     let db = db_get()
-    let rows = db_query(db, "SELECT key, value FROM session_data WHERE session_id='" + id + "'")
+    let rows = db_query(db, "SELECT key, value FROM session_data WHERE session_id = ?", [id])
     db_release(db)
     if (arrays.length(rows) == 0) { return null }
     let data = {}
@@ -88,11 +88,11 @@ fn session_set(id, key, value) {
     if (id == null) { return false }
     let db = db_get()
     // Check if key exists
-    let existing = db_queryOne(db, "SELECT id FROM session_data WHERE session_id='" + id + "' AND key='" + key + "'")
+    let existing = db_queryOne(db, "SELECT id FROM session_data WHERE session_id = ? AND key = ?", [id, key])
     if (existing == null) {
-        db_exec(db, "INSERT INTO session_data (session_id, key, value) VALUES ('" + id + "', '" + key + "', '" + convert.toString(value) + "')")
+        db_exec(db, "INSERT INTO session_data (session_id, key, value) VALUES (?, ?, ?)", [id, key, convert.toString(value)])
     } else {
-        db_exec(db, "UPDATE session_data SET value='" + convert.toString(value) + "', updated_at=datetime('now') WHERE session_id='" + id + "' AND key='" + key + "'")
+        db_exec(db, "UPDATE session_data SET value = ?, updated_at=datetime('now') WHERE session_id = ? AND key = ?", [convert.toString(value), id, key])
     }
     db_release(db)
     return true
@@ -102,7 +102,7 @@ fn session_set(id, key, value) {
 fn session_getValue(id, key, defaultValue) {
     if (id == null) { return defaultValue }
     let db = db_get()
-    let row = db_queryOne(db, "SELECT value FROM session_data WHERE session_id='" + id + "' AND key='" + key + "'")
+    let row = db_queryOne(db, "SELECT value FROM session_data WHERE session_id = ? AND key = ?", [id, key])
     db_release(db)
     if (row == null) { return defaultValue }
     let val = row.value
@@ -114,7 +114,7 @@ fn session_getValue(id, key, defaultValue) {
 fn session_destroy(id) {
     if (id == null) { return false }
     let db = db_get()
-    db_exec(db, "DELETE FROM session_data WHERE session_id='" + id + "'")
+    db_exec(db, "DELETE FROM session_data WHERE session_id = ?", [id])
     db_release(db)
     return true
 }
@@ -123,7 +123,7 @@ fn session_destroy(id) {
 fn session_exists(id) {
     if (id == null) { return false }
     let db = db_get()
-    let row = db_queryOne(db, "SELECT COUNT(*) as cnt FROM session_data WHERE session_id='" + id + "'")
+    let row = db_queryOne(db, "SELECT COUNT(*) as cnt FROM session_data WHERE session_id = ?", [id])
     db_release(db)
     if (row == null) { return false }
     return row.cnt > 0
