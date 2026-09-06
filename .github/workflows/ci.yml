@@ -10,8 +10,8 @@ on:
 env:
   # === 固定 TLL OS Toolchain（禁止随 develop 漂移）===
   TLLOS_REPO: aliquanhou/tllos
-  TLLOS_REF: 687540179c0a5636930ee2516fb1fa0e5b2eb31c
-  TLLOS_COMMIT: 6875401
+  TLLOS_REF: f504edcae003fcaafc7f5e53f29acbcfcb10d3de
+  TLLOS_COMMIT: f504edc
   TLLC_PATH: tools/TLLC/tllc.tllbc
   # Compiler SHA256 (tllc-v1.0.0-rc1, source commit 364b9c5)
   COMPILER_SHA256: 36A5A20EB1124D2F40ED0051357D06DD976E488489DF61D652140FEFC556A845
