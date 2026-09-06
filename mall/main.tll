@@ -289,20 +289,20 @@ router_post(mallRouter, "/cart/add", fn(req) {
     let quantity = 1
     if (body.quantity != null) { quantity = convert.toInt(body.quantity) }
 
-    // Check if already in cart
+    // Check if already in cart (parameterized)
     let existing = null
     if (hasSku) {
-        existing = db_queryOne(req.db, "SELECT * FROM cart_items WHERE user_id=" + convert.toString(currentUser.id) + " AND product_id=" + convert.toString(productId) + " AND sku_id=" + convert.toString(skuId))
+        existing = db_queryOne(req.db, "SELECT * FROM cart_items WHERE user_id = ? AND product_id = ? AND sku_id = ?", [currentUser.id, productId, skuId])
     } else {
-        existing = db_queryOne(req.db, "SELECT * FROM cart_items WHERE user_id=" + convert.toString(currentUser.id) + " AND product_id=" + convert.toString(productId) + " AND sku_id IS NULL")
+        existing = db_queryOne(req.db, "SELECT * FROM cart_items WHERE user_id = ? AND product_id = ? AND sku_id IS NULL", [currentUser.id, productId])
     }
 
     if (existing != null) {
-        db_exec(req.db, "UPDATE cart_items SET quantity=quantity+" + convert.toString(quantity) + " WHERE id=" + convert.toString(existing.id))
+        db_exec(req.db, "UPDATE cart_items SET quantity = quantity + ? WHERE id = ?", [quantity, existing.id])
     } else {
-        let skuVal = "NULL"
-        if (hasSku) { skuVal = convert.toString(skuId) }
-        db_exec(req.db, "INSERT INTO cart_items (user_id, product_id, sku_id, quantity) VALUES (" + convert.toString(currentUser.id) + "," + convert.toString(productId) + "," + skuVal + "," + convert.toString(quantity) + ")")
+        let skuVal = null
+        if (hasSku) { skuVal = skuId }
+        db_exec(req.db, "INSERT INTO cart_items (user_id, product_id, sku_id, quantity) VALUES (?, ?, ?, ?)", [currentUser.id, productId, skuVal, quantity])
     }
 
     return res_json({success: true})
@@ -314,7 +314,7 @@ router_post(mallRouter, "/cart/update", fn(req) {
     let currentUser = auth_currentUser(sessionId)
     if (currentUser == null) { return res_json({error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
-    db_exec(req.db, "UPDATE cart_items SET quantity=" + convert.toString(body.quantity) + " WHERE id=" + convert.toString(body.id) + " AND user_id=" + convert.toString(currentUser.id))
+    db_exec(req.db, "UPDATE cart_items SET quantity = ? WHERE id = ? AND user_id = ?", [body.quantity, body.id, currentUser.id])
     return res_json({success: true})
 })
 
@@ -324,7 +324,7 @@ router_post(mallRouter, "/cart/remove", fn(req) {
     let currentUser = auth_currentUser(sessionId)
     if (currentUser == null) { return res_json({error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
-    db_exec(req.db, "DELETE FROM cart_items WHERE id=" + convert.toString(body.id) + " AND user_id=" + convert.toString(currentUser.id))
+    db_exec(req.db, "DELETE FROM cart_items WHERE id = ? AND user_id = ?", [body.id, currentUser.id])
     return res_json({success: true})
 })
 
@@ -393,12 +393,12 @@ router_post(mallRouter, "/order/create", fn(req) {
     let addressId = body.address_id
     let remark = body.remark
 
-    // Get address
-    let address = db_queryOne(req.db, "SELECT * FROM user_addresses WHERE id=" + convert.toString(addressId) + " AND user_id=" + convert.toString(currentUser.id))
+    // Get address (parameterized)
+    let address = db_queryOne(req.db, "SELECT * FROM user_addresses WHERE id = ? AND user_id = ?", [addressId, currentUser.id])
     if (address == null) { return res_json({error: "请选择收货地址"}, 400) }
 
-    // Get cart items
-    let cartItems = db_query(req.db, "SELECT ci.*, p.name as product_name, p.price as product_price, p.main_image, p.stock as product_stock, ps.spec as sku_spec, ps.price as sku_price, ps.stock as sku_stock FROM cart_items ci LEFT JOIN products p ON ci.product_id=p.id LEFT JOIN product_skus ps ON ci.sku_id=ps.id WHERE ci.user_id=" + convert.toString(currentUser.id))
+    // Get cart items (parameterized)
+    let cartItems = db_query(req.db, "SELECT ci.*, p.name as product_name, p.price as product_price, p.main_image, p.stock as product_stock, ps.spec as sku_spec, ps.price as sku_price, ps.stock as sku_stock FROM cart_items ci LEFT JOIN products p ON ci.product_id=p.id LEFT JOIN product_skus ps ON ci.sku_id=ps.id WHERE ci.user_id = ?", [currentUser.id])
 
     if (arrays.length(cartItems) == 0) { return res_json({error: "购物车为空"}, 400) }
 
@@ -424,15 +424,15 @@ router_post(mallRouter, "/order/create", fn(req) {
         i = i + 1
     }
 
-    // Create order
+    // Create order (parameterized)
     let addrDetail = address.province + address.city + address.district + address.detail
     let remarkVal = ""
     if (remark != null) { remarkVal = remark }
-    db_exec(req.db, "INSERT INTO orders (order_no, user_id, total_amount, status, address_name, address_phone, address_detail, remark) VALUES ('" + orderNo + "'," + convert.toString(currentUser.id) + "," + convert.toString(totalAmount) + ",'pending','" + address.name + "','" + address.phone + "','" + addrDetail + "','" + remarkVal + "')")
+    db_exec(req.db, "INSERT INTO orders (order_no, user_id, total_amount, status, address_name, address_phone, address_detail, remark) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)", [orderNo, currentUser.id, totalAmount, address.name, address.phone, addrDetail, remarkVal])
 
     let orderId = sqlite.lastInsertRowid(db.raw)
 
-    // Create order items and deduct stock
+    // Create order items and deduct stock with concurrency control
     let j = 0
     while (j < arrays.length(cartItems)) {
         let item = cartItems[j]
@@ -441,25 +441,25 @@ router_post(mallRouter, "/order/create", fn(req) {
         let subtotal = price * item.quantity
         let skuSpec = ""
         if (item.sku_spec != null) { skuSpec = item.sku_spec }
-        let skuIdVal = "NULL"
-        if (item.sku_id != null) { skuIdVal = convert.toString(item.sku_id) }
+        let skuIdVal = null
+        if (item.sku_id != null) { skuIdVal = item.sku_id }
 
         let itemImage = ""
         if (item.main_image != null) { itemImage = item.main_image }
-        db_exec(req.db, "INSERT INTO order_items (order_id, product_id, sku_id, product_name, product_image, spec, price, quantity, subtotal) VALUES (" + convert.toString(orderId) + "," + convert.toString(item.product_id) + "," + skuIdVal + ",'" + item.product_name + "','" + itemImage + "','" + skuSpec + "'," + convert.toString(price) + "," + convert.toString(item.quantity) + "," + convert.toString(subtotal) + ")")
+        db_exec(req.db, "INSERT INTO order_items (order_id, product_id, sku_id, product_name, product_image, spec, price, quantity, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [orderId, item.product_id, skuIdVal, item.product_name, itemImage, skuSpec, price, item.quantity, subtotal])
 
-        // Deduct stock
+        // Deduct stock with conditional update to prevent negative stock
         if (item.sku_id != null) {
-            db_exec(req.db, "UPDATE product_skus SET stock=stock-" + convert.toString(item.quantity) + " WHERE id=" + convert.toString(item.sku_id))
+            db_exec(req.db, "UPDATE product_skus SET stock = stock - ? WHERE id = ? AND stock >= ?", [item.quantity, item.sku_id, item.quantity])
         } else {
-            db_exec(req.db, "UPDATE products SET stock=stock-" + convert.toString(item.quantity) + ", sales=sales+" + convert.toString(item.quantity) + " WHERE id=" + convert.toString(item.product_id))
+            db_exec(req.db, "UPDATE products SET stock = stock - ?, sales = sales + ? WHERE id = ? AND stock >= ?", [item.quantity, item.quantity, item.product_id, item.quantity])
         }
 
         j = j + 1
     }
 
-    // Clear cart
-    db_exec(req.db, "DELETE FROM cart_items WHERE user_id=" + convert.toString(currentUser.id))
+    // Clear cart (parameterized)
+    db_exec(req.db, "DELETE FROM cart_items WHERE user_id = ?", [currentUser.id])
 
     db_commit(req.db)
 
