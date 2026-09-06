@@ -495,7 +495,8 @@ fn p3_registerPaymentRoutes(router, db) {
         let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
         if (order == null) { return res_notFound("Order not found") }
         db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='wechat' WHERE id = ?", [orderId])
-        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'wechat', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, 'WX' + convert.toString(time.now())])
+        let wxTxnId = 'WX' + convert.toString(time.now())
+        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'wechat', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, wxTxnId])
         db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES (?, 'income', ?, 'WeChat payment', datetime('now'))", [order.order_no, order.total_amount])
         return res_redirect("/order/" + convert.toString(orderId))
     })
@@ -508,7 +509,8 @@ fn p3_registerPaymentRoutes(router, db) {
         let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
         if (order == null) { return res_notFound("Order not found") }
         db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='alipay' WHERE id = ?", [orderId])
-        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'alipay', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, 'ALI' + convert.toString(time.now())])
+        let aliTxnId = 'ALI' + convert.toString(time.now())
+        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'alipay', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, aliTxnId])
         db_exec(req.db, "INSERT INTO finance_transactions (order_no, type, amount, description, created_at) VALUES (?, 'income', ?, 'Alipay payment', datetime('now'))", [order.order_no, order.total_amount])
         return res_redirect("/order/" + convert.toString(orderId))
     })
@@ -521,7 +523,8 @@ fn p3_registerPaymentRoutes(router, db) {
         let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [orderId])
         if (order == null) { return res_notFound("Order not found") }
         db_exec(req.db, "UPDATE orders SET status='paid', paid_at=datetime('now'), payment_method='balance' WHERE id = ?", [orderId])
-        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'balance', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, 'BAL' + convert.toString(time.now())])
+        let balTxnId = 'BAL' + convert.toString(time.now())
+        db_exec(req.db, "INSERT INTO payments (order_id, method, amount, status, transaction_id, created_at) VALUES (?, 'balance', ?, 'success', ?, datetime('now'))", [orderId, order.total_amount, balTxnId])
         return res_redirect("/order/" + convert.toString(orderId))
     })
 
