@@ -1,8 +1,8 @@
-// TLL Mall - Notification Page (minimal + unread count)
+// TLL Mall - Notification Page (minimal + inline query)
 
+from "./database" import db_queryOne
 from "./router" import router_get, res_html, res_redirect
 from "./auth" import auth_currentUser, cookie_getSessionId
-from "./notification" import notification_getUnreadCount
 
 fn notification_checkAuth(req) {
     let sessionId = cookie_getSessionId(req)
@@ -18,7 +18,8 @@ fn notification_registerRoutes(router) {
     router_get(router, "/notifications", fn(req) {
         let authResult = notification_checkAuth(req)
         if (authResult != null) { return authResult }
-        let unread = notification_getUnreadCount(req.db, req.currentUser.id)
-        return res_html("<html><body><h1>Notifications</h1><p>Unread: " + convert.toString(unread) + "</p></body></html>")
+        let result = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM users WHERE id = ?", [req.currentUser.id])
+        let unread = result.cnt
+        return res_html("<html><body><h1>Notifications</h1><p>Count: " + convert.toString(unread) + "</p></body></html>")
     })
 }
