@@ -162,7 +162,7 @@ fn session_getOrCreate(req) {
 fn session_cookieHeader(sessionId, maxAge) {
     let age = 86400
     if (maxAge != null) { age = maxAge }
-    return "sessionId=" + sessionId + "; Path=/; Max-Age=" + convert.toString(age) + "; HttpOnly"
+    return "sessionId=" + sessionId + "; Path=/; Max-Age=" + convert.toString(age) + "; HttpOnly; SameSite=Lax"
 }
 
 // === Cookie Helpers ===
@@ -270,4 +270,43 @@ fn verify_password(password, hash) {
 
 fn needs_password_rehash(hash) {
     return !strings.startsWith(hash, "$2b$")
+}
+
+// === CSRF Protection (Cross-Site Request Forgery) ===
+// CSPRNG-generated token stored in Session, validated on form submit
+
+fn csrf_generateToken(sessionId) {
+    if (sessionId == null) { return "" }
+    let bytes = crypto.randomBytes(32)
+    let token = _sessionBytesToHex(bytes)
+    session_set(sessionId, "csrf_token", token)
+    return token
+}
+
+fn csrf_getToken(sessionId) {
+    if (sessionId == null) { return "" }
+    let token = session_getValue(sessionId, "csrf_token", null)
+    if (token == null || strings.length(token) == 0) {
+        token = csrf_generateToken(sessionId)
+    }
+    return token
+}
+
+fn csrf_validate(sessionId, token) {
+    if (sessionId == null || token == null) { return false }
+    let expected = session_getValue(sessionId, "csrf_token", null)
+    if (expected == null) { return false }
+    if (strings.length(expected) != strings.length(token)) { return false }
+    let result = 0
+    let i = 0
+    while (i < strings.length(expected)) {
+        if (strings.charAt(expected, i) != strings.charAt(token, i)) { result = result + 1 }
+        i = i + 1
+    }
+    return result == 0
+}
+
+fn csrf_inputHtml(sessionId) {
+    let token = csrf_getToken(sessionId)
+    return "<input type='hidden' name='csrf_token' value='" + token + "'>"
 }
