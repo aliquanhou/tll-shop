@@ -551,10 +551,10 @@ router_post(mallRouter, "/order/pay", fn(req) {
     let currentUser = auth_currentUser(sessionId)
     if (currentUser == null) { return res_json({error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
-    let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(body.order_id) + " AND user_id=" + convert.toString(currentUser.id))
+    let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ? AND user_id = ?", [body.order_id, currentUser.id])
     if (order == null) { return res_json({error: "订单不存在"}, 404) }
     if (order.status != "pending") { return res_json({error: "订单状态不正确"}, 400) }
-    db_exec(req.db, "UPDATE orders SET status='paid', payment_status='paid', paid_at=datetime('now') WHERE id=" + convert.toString(body.order_id))
+    db_exec(req.db, "UPDATE orders SET status='paid', payment_status='paid', paid_at=datetime('now') WHERE id = ?", [body.order_id])
     return res_json({success: true})
 })
 
@@ -658,7 +658,7 @@ router_post(mallRouter, "/user/address/add", fn(req) {
     let currentUser = auth_currentUser(sessionId)
     if (currentUser == null) { return res_json({error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
-    db_exec(req.db, "INSERT INTO user_addresses (user_id, name, phone, province, city, district, detail) VALUES (" + convert.toString(currentUser.id) + ",'" + body.name + "','" + body.phone + "','" + body.province + "','" + body.city + "','" + body.district + "','" + body.detail + "')")
+    db_exec(req.db, "INSERT INTO user_addresses (user_id, name, phone, province, city, district, detail) VALUES (?, ?, ?, ?, ?, ?, ?)", [currentUser.id, body.name, body.phone, body.province, body.city, body.district, body.detail])
     return res_json({success: true})
 })
 
@@ -668,7 +668,7 @@ router_post(mallRouter, "/user/address/delete", fn(req) {
     let currentUser = auth_currentUser(sessionId)
     if (currentUser == null) { return res_json({error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
-    db_exec(req.db, "DELETE FROM user_addresses WHERE id=" + convert.toString(body.id) + " AND user_id=" + convert.toString(currentUser.id))
+    db_exec(req.db, "DELETE FROM user_addresses WHERE id = ? AND user_id = ?", [body.id, currentUser.id])
     return res_json({success: true})
 })
 
