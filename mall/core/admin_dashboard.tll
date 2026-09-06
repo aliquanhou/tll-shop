@@ -1,0 +1,175 @@
+// TLL Mall - Enhanced Admin Dashboard with Analytics
+// Complete statistics dashboard with charts and data visualization
+
+from "./database" import db_query, db_queryOne
+from "./router" import router_get, res_html
+from "./analytics" import analytics_getOverview, analytics_getSalesTrend, analytics_getOrderDistribution, analytics_getTopProducts, analytics_getCategorySales, analytics_getUserGrowth, analytics_getRecentOrders, analytics_getPaymentDistribution, analytics_getLowStockProducts, analytics_getMonthlyComparison
+
+fn admin_dashboard_css() {
+    return "<style>" +
+        ".dashboard-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }" +
+        ".dash-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }" +
+        ".dash-card .num { font-size: 28px; font-weight: bold; color: #333; }" +
+        ".dash-card .lbl { font-size: 13px; color: #999; margin-top: 5px; }" +
+        ".dash-card .trend { font-size: 12px; margin-top: 8px; }" +
+        ".trend-up { color: #52c41a; }" +
+        ".trend-down { color: #ff4d4f; }" +
+        ".chart-container { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }" +
+        ".chart-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; color: #333; }" +
+        ".bar-chart { display: flex; align-items: flex-end; height: 200px; gap: 8px; padding: 10px 0; }" +
+        ".bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; }" +
+        ".bar { width: 100%; background: linear-gradient(180deg, #667eea 0%, #764ba2 100%); border-radius: 4px 4px 0 0; min-height: 4px; position: relative; }" +
+        ".bar-val { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #666; white-space: nowrap; }" +
+        ".bar-lbl { font-size: 11px; color: #999; margin-top: 5px; }" +
+        ".two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }" +
+        ".dist-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }" +
+        ".dist-name { flex: 1; font-size: 14px; color: #333; }" +
+        ".dist-count { font-size: 14px; font-weight: 600; color: #667eea; margin-right: 10px; }" +
+        ".dist-amount { font-size: 13px; color: #999; }" +
+        ".product-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }" +
+        ".product-rank { width: 24px; height: 24px; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-right: 12px; }" +
+        ".rank-1 { background: #ffd700; color: #fff; }" +
+        ".rank-2 { background: #c0c0c0; color: #fff; }" +
+        ".rank-3 { background: #cd7f32; color: #fff; }" +
+        ".product-name { flex: 1; font-size: 14px; color: #333; }" +
+        ".product-sales { font-size: 13px; color: #667eea; font-weight: 600; }" +
+        ".low-stock-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #fff0f0; }" +
+        ".low-stock-name { flex: 1; font-size: 14px; color: #333; }" +
+        ".low-stock-num { font-size: 14px; font-weight: bold; color: #ff4d4f; }" +
+        ".order-table { width: 100%; border-collapse: collapse; }" +
+        ".order-table th { text-align: left; padding: 10px; background: #fafafa; font-size: 13px; color: #666; border-bottom: 2px solid #f0f0f0; }" +
+        ".order-table td { padding: 10px; font-size: 13px; color: #333; border-bottom: 1px solid #f0f0f0; }" +
+        ".status-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; }" +
+        ".status-pending { background: #fff7e6; color: #fa8c16; }" +
+        ".status-paid { background: #e6f7ff; color: #1890ff; }" +
+        ".status-shipped { background: #f6ffed; color: #52c41a; }" +
+        ".status-completed { background: #f0f0f0; color: #666; }" +
+        ".status-cancelled { background: #fff1f0; color: #ff4d4f; }" +
+        "</style>"
+}
+
+fn _statusBadge(status) {
+    if (status == "pending") { return "<span class='status-badge status-pending'>待付款</span>" }
+    if (status == "paid") { return "<span class='status-badge status-paid'>待发货</span>" }
+    if (status == "shipped") { return "<span class='status-badge status-shipped'>已发货</span>" }
+    if (status == "completed") { return "<span class='status-badge status-completed'>已完成</span>" }
+    if (status == "cancelled") { return "<span class='status-badge status-cancelled'>已取消</span>" }
+    return "<span class='status-badge'>" + status + "</span>"
+}
+
+fn _barChart(data, maxVal, labelField, valueField) {
+    let html = "<div class='bar-chart'>"
+    let i = 0
+    while (i < arrays.length(data)) {
+        let item = data[i]
+        let pct = 10
+        if (maxVal > 0) { pct = (item[valueField] / maxVal) * 90 }
+        if (pct < 4) { pct = 4 }
+        let heightStr = convert.toString(pct) + "%"
+        html = html + "<div class='bar-item'><div class='bar' style='height:" + heightStr + "'><span class='bar-val'>¥" + convert.toString(item[valueField]) + "</span></div><div class='bar-lbl'>" + item[labelField] + "</div></div>"
+        i = i + 1
+    }
+    html = html + "</div>"
+    return html
+}
+
+fn admin_dashboardPage(req) {
+    let overview = analytics_getOverview(req.db)
+    let monthly = analytics_getMonthlyComparison(req.db)
+    let salesTrend = analytics_getSalesTrend(req.db, 7)
+    let orderDist = analytics_getOrderDistribution(req.db)
+    let topProducts = analytics_getTopProducts(req.db, 5)
+    let categorySales = analytics_getCategorySales(req.db)
+    let recentOrders = analytics_getRecentOrders(req.db, 8)
+    let lowStock = analytics_getLowStockProducts(req.db, 10)
+
+    // Stat cards
+    let statsHtml = "<div class='dashboard-grid'>" +
+        "<div class='dash-card'><div class='num'>¥" + convert.toString(overview.total_sales) + "</div><div class='lbl'>总销售额</div>" +
+        "<div class='trend trend-up'>本月 ¥" + convert.toString(monthly.this_month_sales) + "</div></div>" +
+        "<div class='dash-card'><div class='num'>" + convert.toString(overview.total_orders) + "</div><div class='lbl'>总订单数</div>" +
+        "<div class='trend'>本月 " + convert.toString(monthly.this_month_orders) + " 单</div></div>" +
+        "<div class='dash-card'><div class='num'>" + convert.toString(overview.total_users) + "</div><div class='lbl'>用户总数</div>" +
+        "<div class='trend trend-up'>今日 " + convert.toString(overview.today_orders) + " 单</div></div>" +
+        "<div class='dash-card'><div class='num'>" + convert.toString(overview.low_stock_count) + "</div><div class='lbl'>库存预警</div>" +
+        "<div class='trend trend-down'>待处理 " + convert.toString(overview.pending_orders) + " 单</div></div>" +
+        "</div>"
+
+    // Sales trend chart
+    let maxSales = 0
+    let ti = 0
+    while (ti < arrays.length(salesTrend)) {
+        if (salesTrend[ti].sales > maxSales) { maxSales = salesTrend[ti].sales }
+        ti = ti + 1
+    }
+    let salesChart = _barChart(salesTrend, maxSales, "date", "sales")
+    let salesHtml = "<div class='chart-container'><div class='chart-title'>近7天销售趋势</div>" + salesChart + "</div>"
+
+    // Order distribution
+    let distHtml = "<div class='chart-container'><div class='chart-title'>订单状态分布</div>"
+    let di = 0
+    while (di < arrays.length(orderDist)) {
+        let d = orderDist[di]
+        distHtml = distHtml + "<div class='dist-item'><span class='dist-name'>" + _statusBadge(d.status) + "</span><span class='dist-count'>" + convert.toString(d.count) + " 单</span><span class='dist-amount'>¥" + convert.toString(d.amount) + "</span></div>"
+        di = di + 1
+    }
+    distHtml = distHtml + "</div>"
+
+    // Top products
+    let productsHtml = "<div class='chart-container'><div class='chart-title'>热销商品 TOP 5</div>"
+    let pi = 0
+    while (pi < arrays.length(topProducts)) {
+        let p = topProducts[pi]
+        let rankClass = ""
+        if (pi == 0) { rankClass = "rank-1" }
+        if (pi == 1) { rankClass = "rank-2" }
+        if (pi == 2) { rankClass = "rank-3" }
+        productsHtml = productsHtml + "<div class='product-row'><span class='product-rank " + rankClass + "'>" + convert.toString(pi + 1) + "</span><span class='product-name'>" + p.name + "</span><span class='product-sales'>" + convert.toString(p.total_qty) + " 件 / ¥" + convert.toString(p.total_sales) + "</span></div>"
+        pi = pi + 1
+    }
+    productsHtml = productsHtml + "</div>"
+
+    // Low stock
+    let lowStockHtml = "<div class='chart-container'><div class='chart-title'>库存预警商品</div>"
+    if (arrays.length(lowStock) == 0) {
+        lowStockHtml = lowStockHtml + "<div style='padding:20px;text-align:center;color:#999'>暂无库存预警商品</div>"
+    } else {
+        let li = 0
+        while (li < arrays.length(lowStock)) {
+            let p = lowStock[li]
+            lowStockHtml = lowStockHtml + "<div class='low-stock-item'><span class='low-stock-name'>" + p.name + "</span><span class='low-stock-num'>库存 " + convert.toString(p.stock) + "</span></div>"
+            li = li + 1
+        }
+    }
+    lowStockHtml = lowStockHtml + "</div>"
+
+    // Recent orders
+    let ordersHtml = "<div class='chart-container'><div class='chart-title'>最近订单</div><table class='order-table'><thead><tr><th>订单号</th><th>用户</th><th>金额</th><th>状态</th><th>时间</th></tr></thead><tbody>"
+    let oi = 0
+    while (oi < arrays.length(recentOrders)) {
+        let o = recentOrders[oi]
+        let username = "-"
+        if (o.username != null) { username = o.username }
+        ordersHtml = ordersHtml + "<tr><td>" + o.order_no + "</td><td>" + username + "</td><td>¥" + convert.toString(o.total_amount) + "</td><td>" + _statusBadge(o.status) + "</td><td>" + o.created_at + "</td></tr>"
+        oi = oi + 1
+    }
+    ordersHtml = ordersHtml + "</tbody></table></div>"
+
+    let body = admin_dashboard_css() +
+        "<div class='main'><div class='header'><h2>数据仪表盘</h2><span>欢迎, " + req.currentUser.username + "</span></div>" +
+        statsHtml +
+        salesHtml +
+        "<div class='two-col'>" + distHtml + productsHtml + "</div>" +
+        "<div class='two-col'>" + lowStockHtml + ordersHtml + "</div>" +
+        "</div>"
+
+    return res_html(admin_page("数据仪表盘", body))
+}
+
+fn admin_dashboard_registerAll(router) {
+    router_get(router, "/admin/dashboard", fn(req) {
+        let authResult = admin_checkAuth(req)
+        if (authResult != null) { return authResult }
+        return admin_dashboardPage(req)
+    })
+}

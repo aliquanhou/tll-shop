@@ -1,0 +1,97 @@
+// TLL Mall - Analytics & Statistics Module
+// Sales, orders, users, products analytics for admin dashboard
+
+from "./database" import db_query, db_queryOne
+
+// === Overview Statistics ===
+fn analytics_getOverview(db) {
+    let totalSales = db_queryOne(db, "SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status != 'cancelled' AND payment_status = 'paid'")
+    let totalOrders = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status != 'cancelled'")
+    let totalUsers = db_queryOne(db, "SELECT COUNT(*) as cnt FROM users WHERE status = 'active'")
+    let totalProducts = db_queryOne(db, "SELECT COUNT(*) as cnt FROM products WHERE status = 'on'")
+    let todayOrders = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE date(created_at) = date('now')")
+    let todaySales = db_queryOne(db, "SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE date(created_at) = date('now') AND status != 'cancelled'")
+    let pendingOrders = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status = 'pending'")
+    let lowStock = db_queryOne(db, "SELECT COUNT(*) as cnt FROM products WHERE stock < 10 AND status = 'on'")
+
+    return {
+        total_sales: totalSales.total,
+        total_orders: totalOrders.cnt,
+        total_users: totalUsers.cnt,
+        total_products: totalProducts.cnt,
+        today_orders: todayOrders.cnt,
+        today_sales: todaySales.total,
+        pending_orders: pendingOrders.cnt,
+        low_stock_count: lowStock.cnt
+    }
+}
+
+// === Sales Trend (last N days) ===
+fn analytics_getSalesTrend(db, days) {
+    let limit = 7
+    if (days != null) { limit = days }
+    let rows = db_query(db, "SELECT date(created_at) as date, COUNT(*) as orders, COALESCE(SUM(total_amount),0) as sales FROM orders WHERE status != 'cancelled' AND created_at >= date('now', '-' || ? || ' days') GROUP BY date(created_at) ORDER BY date ASC", [limit])
+    return rows
+}
+
+// === Order Status Distribution ===
+fn analytics_getOrderDistribution(db) {
+    let rows = db_query(db, "SELECT status, COUNT(*) as count, COALESCE(SUM(total_amount),0) as amount FROM orders WHERE status != 'cancelled' GROUP BY status ORDER BY count DESC")
+    return rows
+}
+
+// === Top Selling Products ===
+fn analytics_getTopProducts(db, limit) {
+    let n = 10
+    if (limit != null) { n = limit }
+    let rows = db_query(db, "SELECT p.id, p.name, p.main_image, p.price, COALESCE(SUM(oi.quantity),0) as total_qty, COALESCE(SUM(oi.subtotal),0) as total_sales FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id LEFT JOIN orders o ON oi.order_id = o.id WHERE o.status != 'cancelled' GROUP BY p.id ORDER BY total_qty DESC LIMIT ?", [n])
+    return rows
+}
+
+// === Category Sales Distribution ===
+fn analytics_getCategorySales(db) {
+    let rows = db_query(db, "SELECT c.id, c.name, COALESCE(SUM(oi.quantity),0) as total_qty, COALESCE(SUM(oi.subtotal),0) as total_sales FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN orders o ON oi.order_id = o.id WHERE o.status != 'cancelled' AND c.id IS NOT NULL GROUP BY c.id ORDER BY total_sales DESC")
+    return rows
+}
+
+// === User Growth Trend ===
+fn analytics_getUserGrowth(db, days) {
+    let limit = 7
+    if (days != null) { limit = days }
+    let rows = db_query(db, "SELECT date(created_at) as date, COUNT(*) as new_users FROM users WHERE created_at >= date('now', '-' || ? || ' days') GROUP BY date(created_at) ORDER BY date ASC", [limit])
+    return rows
+}
+
+// === Recent Orders ===
+fn analytics_getRecentOrders(db, limit) {
+    let n = 10
+    if (limit != null) { n = limit }
+    let rows = db_query(db, "SELECT o.id, o.order_no, o.total_amount, o.status, o.payment_status, o.created_at, u.username FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT ?", [n])
+    return rows
+}
+
+// === Payment Method Distribution ===
+fn analytics_getPaymentDistribution(db) {
+    let rows = db_query(db, "SELECT payment_method, COUNT(*) as count, COALESCE(SUM(total_amount),0) as amount FROM orders WHERE payment_status = 'paid' AND payment_method IS NOT NULL GROUP BY payment_method ORDER BY count DESC")
+    return rows
+}
+
+// === Low Stock Products ===
+fn analytics_getLowStockProducts(db, threshold) {
+    let t = 10
+    if (threshold != null) { t = threshold }
+    let rows = db_query(db, "SELECT id, name, price, stock, status FROM products WHERE stock < ? AND status = 'on' ORDER BY stock ASC", [t])
+    return rows
+}
+
+// === Monthly Sales Comparison ===
+fn analytics_getMonthlyComparison(db) {
+    let thisMonth = db_queryOne(db, "SELECT COALESCE(SUM(total_amount),0) as sales, COUNT(*) as orders FROM orders WHERE status != 'cancelled' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')")
+    let lastMonth = db_queryOne(db, "SELECT COALESCE(SUM(total_amount),0) as sales, COUNT(*) as orders FROM orders WHERE status != 'cancelled' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', '-1 month')")
+    return {
+        this_month_sales: thisMonth.sales,
+        this_month_orders: thisMonth.orders,
+        last_month_sales: lastMonth.sales,
+        last_month_orders: lastMonth.orders
+    }
+}
