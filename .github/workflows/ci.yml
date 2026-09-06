@@ -10,7 +10,7 @@ on:
 env:
   # === 固定 TLL OS Toolchain（禁止随 develop 漂移）===
   TLLOS_REPO: aliquanhou/tllos
-  TLLOS_REF: 6875401
+  TLLOS_REF: 687540179c0a5636930ee2516fb1fa0e5b2eb31c
   TLLOS_COMMIT: 6875401
   TLLC_PATH: tools/TLLC/tllc.tllbc
   # Compiler SHA256 (tllc-v1.0.0-rc1, source commit 364b9c5)
@@ -37,14 +37,17 @@ jobs:
           repository: ${{ env.TLLOS_REPO }}
           ref: ${{ env.TLLOS_REF }}
           path: tllos
-          fetch-depth: 1
 
       - name: Verify TLL OS commit
         shell: bash
         run: |
           echo "=== Verifying TLL OS Toolchain ==="
+          if [ ! -d "tllos" ]; then
+            echo "❌ FAIL: tllos directory not found"
+            exit 1
+          fi
           cd tllos
-          ACTUAL_COMMIT=$(git rev-parse --short HEAD)
+          ACTUAL_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
           echo "Expected commit: ${{ env.TLLOS_COMMIT }}"
           echo "Actual commit:   $ACTUAL_COMMIT"
           if [ "$ACTUAL_COMMIT" != "${{ env.TLLOS_COMMIT }}" ]; then
