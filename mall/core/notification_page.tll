@@ -1,4 +1,4 @@
-// TLL Mall - Notification Page (minimal + inline query)
+// TLL Mall - Notification Page (minimal + local function)
 
 from "./database" import db_queryOne
 from "./router" import router_get, res_html, res_redirect
@@ -14,12 +14,16 @@ fn notification_checkAuth(req) {
     return null
 }
 
+fn myGetCount(db, userId) {
+    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM users WHERE id = ?", [userId])
+    return result.cnt
+}
+
 fn notification_registerRoutes(router) {
     router_get(router, "/notifications", fn(req) {
         let authResult = notification_checkAuth(req)
         if (authResult != null) { return authResult }
-        let result = db_queryOne(req.db, "SELECT COUNT(*) as cnt FROM users WHERE id = ?", [req.currentUser.id])
-        let unread = result.cnt
-        return res_html("<html><body><h1>Notifications</h1><p>Count: " + convert.toString(unread) + "</p></body></html>")
+        let count = myGetCount(req.db, req.currentUser.id)
+        return res_html("<html><body><h1>Notifications</h1><p>Count: " + convert.toString(count) + "</p></body></html>")
     })
 }
