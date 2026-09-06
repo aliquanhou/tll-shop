@@ -79,66 +79,74 @@ jobs:
           echo "✅ Compiler SHA256 verified"
           echo "Compiler size: $(wc -c < "$TLLC") bytes"
 
-      - name: Build TLL Runtime (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Setup build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libssl-dev
+
+      - name: Setup build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install gcc || true
+
+      - name: Build TLL Runtime (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
-          echo "=== Building TLL Runtime ==="
+          echo "=== Building TLL Runtime (Linux) ==="
           cd tllos/host/c
           echo "Source files:"
           ls *.c
-
-          # 检测 CPU 核心数（macOS 用 sysctl，Linux 用 nproc）
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-          else
-            NPROC=$(nproc 2>/dev/null || echo 4)
-          fi
-          echo "CPU cores: $NPROC"
-
-          # 使用 Makefile 构建
-          if command -v make &> /dev/null && [ -f Makefile ]; then
-            echo "Building with make..."
-            make -j$NPROC 2>&1 | tail -20
-            MAKE_RESULT=$?
-            echo "make exit code: $MAKE_RESULT"
-          else
-            echo "make not available, using direct gcc"
-            MAKE_RESULT=1
-          fi
-
-          # 如果 make 失败，使用直接 gcc 编译所有源文件
-          if [ ! -f tllvm ]; then
-            echo "make failed or tllvm not found, building with direct gcc..."
-            SRCS="main.c vm.c value.c json.c builtin.c sqlite_builtin.c crypto_builtin.c password_builtin.c hmac_builtin.c http_client_builtin.c sqlite3.c"
-            echo "Compiling: $SRCS"
-            gcc -O2 -o tllvm $SRCS -lm -lpthread -ldl 2>&1 | tail -20
-            GCC_RESULT=$?
-            echo "gcc exit code: $GCC_RESULT"
-          fi
-
-          if [ ! -f tllvm ]; then
+          gcc -O2 -std=gnu99 -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE \
+            -o tllvm \
+            main.c vm.c value.c json.c builtin.c \
+            sqlite_builtin.c crypto_builtin.c password_builtin.c \
+            hmac_builtin.c http_client_builtin.c sqlite3.c \
+            -lm -lpthread -ldl -lssl -lcrypto
+          BUILD_RESULT=$?
+          echo "gcc exit code: $BUILD_RESULT"
+          if [ $BUILD_RESULT -ne 0 ] || [ ! -f tllvm ]; then
             echo "❌ FAIL: tllvm build failed"
-            ls -la
             exit 1
           fi
           echo "✅ tllvm built successfully"
           ls -la tllvm
-          file tllvm 2>/dev/null || true
+          ./tllvm --version 2>/dev/null || true
+
+      - name: Build TLL Runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "=== Building TLL Runtime (macOS) ==="
+          cd tllos/host/c
+          echo "Source files:"
+          ls *.c
+          gcc -O2 -std=gnu99 -D_DARWIN_C_SOURCE \
+            -o tllvm \
+            main.c vm.c value.c json.c builtin.c \
+            sqlite_builtin.c crypto_builtin.c password_builtin.c \
+            hmac_builtin.c http_client_builtin.c sqlite3.c \
+            -lm -lpthread -framework Security -framework CoreFoundation
+          BUILD_RESULT=$?
+          echo "gcc exit code: $BUILD_RESULT"
+          if [ $BUILD_RESULT -ne 0 ] || [ ! -f tllvm ]; then
+            echo "❌ FAIL: tllvm build failed"
+            exit 1
+          fi
+          echo "✅ tllvm built successfully"
+          ls -la tllvm
+          ./tllvm --version 2>/dev/null || true
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Build TLL Runtime (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          echo === Building TLL Runtime ===
+          echo === Building TLL Runtime (Windows) ===
           cd tllos\host\c
-          where cl.exe >nul 2>&1
-          if %errorlevel%==0 (
-            cl /O2 /Fe:tllvm.exe tllvm.c /link ws2_32.lib winhttp.lib 2>&1 | tail -5
-          ) else (
-            echo MSVC not found in PATH
-          )
-          if not exist tllvm.exe (
+          cl /O2 /D_CRT_SECURE_NO_WARNINGS /Fe:tllvm.exe main.c vm.c value.c json.c builtin.c sqlite_builtin.c crypto_builtin.c password_builtin.c hmac_builtin.c http_client_builtin.c sqlite3.c ws2_32.lib winhttp.lib bcrypt.lib
+          if errorlevel 1 (
             echo ❌ FAIL: tllvm.exe build failed
             exit /b 1
           )
