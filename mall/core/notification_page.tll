@@ -1,18 +1,17 @@
-// TLL Mall - Notification Page (all functions inlined to avoid module import issue)
+// TLL Mall - Notification Page (step by step)
 
-from "./database" import db_exec, db_query, db_queryOne
-from "./router" import router_get, res_html, res_redirect, req_getQuery
+from "./database" import db_query, db_queryOne
+from "./router" import router_get, res_html, res_redirect
 from "./auth" import auth_currentUser, cookie_getSessionId
 
-// === Inlined notification functions ===
-
-fn notification_send(db, userId, title, content, type) {
-    let notificationType = "system"
-    if (type != null) { notificationType = type }
-    let notificationContent = ""
-    if (content != null) { notificationContent = content }
-    db_exec(db, "INSERT INTO notifications (user_id, title, content, type) VALUES (?, ?, ?, ?)", [userId, title, notificationContent, notificationType])
-    return true
+fn notification_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
 }
 
 fn notification_getList(db, userId, page, pageSize) {
@@ -27,200 +26,12 @@ fn notification_getList(db, userId, page, pageSize) {
     return db_query(db, sql, [userId])
 }
 
-fn notification_getTotal(db, userId) {
-    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM notifications WHERE user_id = ?", [userId])
-    return result.cnt
-}
-
-fn notification_getUnreadCount(db, userId) {
-    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM notifications WHERE user_id = ? AND is_read = 0", [userId])
-    return result.cnt
-}
-
-fn notification_markAsRead(db, userId, notificationId) {
-    db_exec(db, "UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", [notificationId, userId])
-    return true
-}
-
-fn notification_markAllAsRead(db, userId) {
-    db_exec(db, "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0", [userId])
-    return true
-}
-
-fn notification_delete(db, userId, notificationId) {
-    db_exec(db, "DELETE FROM notifications WHERE id = ? AND user_id = ?", [notificationId, userId])
-    return true
-}
-
-fn notification_clearRead(db, userId) {
-    db_exec(db, "DELETE FROM notifications WHERE user_id = ? AND is_read = 1", [userId])
-    return true
-}
-
-fn notification_typeBadge(type) {
-    if (type == "order") { return "<span style='background:#e6f7ff;color:#1890ff;padding:2px 8px;border-radius:4px;font-size:12px'>订单</span>" }
-    if (type == "payment") { return "<span style='background:#f6ffed;color:#52c41a;padding:2px 8px;border-radius:4px;font-size:12px'>支付</span>" }
-    if (type == "system") { return "<span style='background:#f0f0f0;color:#666;padding:2px 8px;border-radius:4px;font-size:12px'>系统</span>" }
-    if (type == "promotion") { return "<span style='background:#fff7e6;color:#fa8c16;padding:2px 8px;border-radius:4px;font-size:12px'>活动</span>" }
-    return "<span style='background:#f0f0f0;color:#666;padding:2px 8px;border-radius:4px;font-size:12px'>" + type + "</span>"
-}
-
-// === Page functions ===
-
-fn notification_page(title, body) {
-    return "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>" + title + " - TLL OS 商城</title><style>" +
-        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;background:#f5f5f5;color:#333}" +
-        ".header{background:#fff;padding:16px 24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);display:flex;justify-content:space-between;align-items:center}" +
-        ".header h1{margin:0;font-size:20px;color:#1890ff}" +
-        ".header a{color:#666;text-decoration:none;margin-left:16px}" +
-        ".container{max-width:900px;margin:24px auto;padding:0 16px}" +
-        ".toolbar{background:#fff;padding:16px 24px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}" +
-        ".toolbar .stats{color:#666;font-size:14px}" +
-        ".toolbar .stats strong{color:#ff4d4f}" +
-        ".toolbar .actions a{display:inline-block;padding:8px 16px;background:#1890ff;color:#fff;text-decoration:none;border-radius:4px;margin-left:8px;font-size:14px}" +
-        ".toolbar .actions a.danger{background:#ff4d4f}" +
-        ".notification-list{background:#fff;border-radius:8px;overflow:hidden}" +
-        ".notification-item{padding:16px 24px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:flex-start}" +
-        ".notification-item:last-child{border-bottom:none}" +
-        ".notification-item.unread{background:#f0f8ff}" +
-        ".notification-content{flex:1}" +
-        ".notification-title{font-size:15px;font-weight:bold;margin-bottom:6px;color:#333}" +
-        ".notification-item.unread .notification-title{color:#1890ff}" +
-        ".notification-body{font-size:13px;color:#666;margin-bottom:8px;line-height:1.6}" +
-        ".notification-meta{font-size:12px;color:#999;display:flex;gap:12px;align-items:center}" +
-        ".notification-actions{display:flex;gap:8px;margin-left:16px}" +
-        ".notification-actions a{color:#1890ff;text-decoration:none;font-size:13px}" +
-        ".notification-actions a.danger{color:#ff4d4f}" +
-        ".empty{text-align:center;padding:60px 24px;color:#999}" +
-        ".empty .icon{font-size:48px;margin-bottom:16px}" +
-        ".pagination{text-align:center;padding:16px;background:#fff;border-radius:8px;margin-top:16px}" +
-        ".pagination a{display:inline-block;padding:6px 12px;margin:0 4px;border:1px solid #d9d9d9;border-radius:4px;color:#666;text-decoration:none;font-size:13px}" +
-        ".pagination a.active{background:#1890ff;color:#fff;border-color:#1890ff}" +
-        ".pagination a.disabled{color:#ccc;cursor:not-allowed}" +
-        "</style></head><body>" + body + "</body></html>"
-}
-
-fn notification_checkAuth(req) {
-    let sessionId = cookie_getSessionId(req)
-    let user = auth_currentUser(sessionId)
-    if (user == null) {
-        return res_redirect("/login?redirect=/notifications")
-    }
-    req.currentUser = user
-    return null
-}
-
 fn notification_registerRoutes(router) {
     router_get(router, "/notifications", fn(req) {
         let authResult = notification_checkAuth(req)
         if (authResult != null) { return authResult }
-
-        let userId = req.currentUser.id
-        let page = 1
-        let pageStr = req_getQuery(req, "page", "1")
-        page = convert.toInt(pageStr)
-        if (page < 1) { page = 1 }
-        let pageSize = 20
-
-        let notifications = notification_getList(req.db, userId, page, pageSize)
-        let total = notification_getTotal(req.db, userId)
-        let unread = notification_getUnreadCount(req.db, userId)
-        let totalPages = (total + pageSize - 1) / pageSize
-        if (totalPages < 1) { totalPages = 1 }
-
-        let listHtml = ""
-        let i = 0
-        while (i < arrays.length(notifications)) {
-            let n = notifications[i]
-            let readClass = ""
-            if (n.is_read == 0) { readClass = " unread" }
-            let readLink = ""
-            if (n.is_read == 0) {
-                readLink = "<a href='/notifications/read/" + convert.toString(n.id) + "'>标记已读</a>"
-            }
-            listHtml = listHtml +
-                "<div class='notification-item" + readClass + "'>" +
-                "<div class='notification-content'>" +
-                "<div class='notification-title'>" + n.title + "</div>" +
-                "<div class='notification-body'>" + n.content + "</div>" +
-                "<div class='notification-meta'>" +
-                notification_typeBadge(n.type) +
-                "<span>" + n.created_at + "</span>" +
-                "</div></div>" +
-                "<div class='notification-actions'>" +
-                readLink +
-                "<a href='/notifications/delete/" + convert.toString(n.id) + "' class='danger'>删除</a>" +
-                "</div></div>"
-            i = i + 1
-        }
-
-        if (arrays.length(notifications) == 0) {
-            listHtml = "<div class='empty'><div class='icon'>🔔</div><div>暂无通知</div></div>"
-        }
-
-        let paginationHtml = "<div class='pagination'>"
-        if (page > 1) {
-            paginationHtml = paginationHtml + "<a href='/notifications?page=" + convert.toString(page - 1) + "'>上一页</a>"
-        } else {
-            paginationHtml = paginationHtml + "<a class='disabled'>上一页</a>"
-        }
-        let pi = 1
-        while (pi <= totalPages) {
-            let activeClass = ""
-            if (pi == page) { activeClass = " active" }
-            paginationHtml = paginationHtml + "<a href='/notifications?page=" + convert.toString(pi) + "' class='" + activeClass + "'>" + convert.toString(pi) + "</a>"
-            pi = pi + 1
-        }
-        if (page < totalPages) {
-            paginationHtml = paginationHtml + "<a href='/notifications?page=" + convert.toString(page + 1) + "'>下一页</a>"
-        } else {
-            paginationHtml = paginationHtml + "<a class='disabled'>下一页</a>"
-        }
-        paginationHtml = paginationHtml + "</div>"
-
-        let body =
-            "<div class='header'><h1>🔔 消息中心</h1><div><a href='/'>首页</a><a href='/user'>个人中心</a></div></div>" +
-            "<div class='container'>" +
-            "<div class='toolbar'>" +
-            "<div class='stats'>共 <strong>" + convert.toString(total) + "</strong> 条通知，<strong>" + convert.toString(unread) + "</strong> 条未读</div>" +
-            "<div class='actions'>" +
-            "<a href='/notifications/read-all'>全部已读</a>" +
-            "<a href='/notifications/clear-read' class='danger'>清除已读</a>" +
-            "</div></div>" +
-            "<div class='notification-list'>" + listHtml + "</div>" +
-            paginationHtml +
-            "</div>"
-
-        return res_html(notification_page("消息中心", body))
-    })
-
-    router_get(router, "/notifications/read/:id", fn(req) {
-        let authResult = notification_checkAuth(req)
-        if (authResult != null) { return authResult }
-        let notificationId = convert.toInt(req.params.id)
-        notification_markAsRead(req.db, req.currentUser.id, notificationId)
-        return res_redirect("/notifications")
-    })
-
-    router_get(router, "/notifications/read-all", fn(req) {
-        let authResult = notification_checkAuth(req)
-        if (authResult != null) { return authResult }
-        notification_markAllAsRead(req.db, req.currentUser.id)
-        return res_redirect("/notifications")
-    })
-
-    router_get(router, "/notifications/delete/:id", fn(req) {
-        let authResult = notification_checkAuth(req)
-        if (authResult != null) { return authResult }
-        let notificationId = convert.toInt(req.params.id)
-        notification_delete(req.db, req.currentUser.id, notificationId)
-        return res_redirect("/notifications")
-    })
-
-    router_get(router, "/notifications/clear-read", fn(req) {
-        let authResult = notification_checkAuth(req)
-        if (authResult != null) { return authResult }
-        notification_clearRead(req.db, req.currentUser.id)
-        return res_redirect("/notifications")
+        let notifications = notification_getList(req.db, req.currentUser.id, 1, 20)
+        let count = arrays.length(notifications)
+        return res_html("<html><body><h1>Notifications</h1><p>Count: " + convert.toString(count) + "</p></body></html>")
     })
 }
