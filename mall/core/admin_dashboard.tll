@@ -3,6 +3,7 @@
 
 from "./database" import db_query, db_queryOne
 from "./router" import router_get, res_html
+from "./admin" import admin_checkAuth, admin_page
 from "./analytics" import analytics_getOverview, analytics_getSalesTrend, analytics_getOrderDistribution, analytics_getTopProducts, analytics_getCategorySales, analytics_getUserGrowth, analytics_getRecentOrders, analytics_getPaymentDistribution, analytics_getLowStockProducts, analytics_getMonthlyComparison
 
 fn admin_dashboard_css() {

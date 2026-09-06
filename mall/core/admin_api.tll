@@ -2,7 +2,7 @@
 // Provides full Create/Read/Update/Delete APIs for all backend modules
 
 from "./database" import db_exec, db_query, db_queryOne, db_insert
-from "./router" import router_get, router_post, router_put, router_delete, res_json, res_notFound
+from "./router" import router_get, router_post, router_put, router_delete, res_json, res_notFound, req_getQuery
 from "./auth" import auth_currentUser, cookie_getSessionId
 from "./analytics" import analytics_getOverview, analytics_getSalesTrend, analytics_getOrderDistribution, analytics_getTopProducts, analytics_getCategorySales, analytics_getUserGrowth, analytics_getRecentOrders, analytics_getPaymentDistribution, analytics_getLowStockProducts, analytics_getMonthlyComparison
 
