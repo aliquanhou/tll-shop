@@ -1,0 +1,72 @@
+// TLL Mall - Notification System
+// In-app notifications and message center
+
+from "./database" import db_exec, db_query, db_queryOne
+
+// Send a notification to a user
+fn notification_send(db, userId, title, content, type) {
+    let notificationType = "system"
+    if (type != null) { notificationType = type }
+    let notificationContent = ""
+    if (content != null) { notificationContent = content }
+    db_exec(db, "INSERT INTO notifications (user_id, title, content, type) VALUES (?, ?, ?, ?)", [userId, title, notificationContent, notificationType])
+    return true
+}
+
+// Get notification list for a user (paginated)
+fn notification_getList(db, userId, page, pageSize) {
+    let p = 1
+    if (page != null) { p = page }
+    let ps = 20
+    if (pageSize != null) { ps = pageSize }
+    let offset = (p - 1) * ps
+    let offsetStr = convert.toString(offset)
+    let psStr = convert.toString(ps)
+    let sql = "SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT " + psStr + " OFFSET " + offsetStr
+    return db_query(db, sql, [userId])
+}
+
+// Get total notification count for a user
+fn notification_getTotal(db, userId) {
+    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM notifications WHERE user_id = ?", [userId])
+    return result.cnt
+}
+
+// Get unread notification count for a user
+fn notification_getUnreadCount(db, userId) {
+    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM notifications WHERE user_id = ? AND is_read = 0", [userId])
+    return result.cnt
+}
+
+// Mark a single notification as read
+fn notification_markAsRead(db, userId, notificationId) {
+    db_exec(db, "UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", [notificationId, userId])
+    return true
+}
+
+// Mark all notifications as read for a user
+fn notification_markAllAsRead(db, userId) {
+    db_exec(db, "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0", [userId])
+    return true
+}
+
+// Delete a notification
+fn notification_delete(db, userId, notificationId) {
+    db_exec(db, "DELETE FROM notifications WHERE id = ? AND user_id = ?", [notificationId, userId])
+    return true
+}
+
+// Delete all read notifications for a user
+fn notification_clearRead(db, userId) {
+    db_exec(db, "DELETE FROM notifications WHERE user_id = ? AND is_read = 1", [userId])
+    return true
+}
+
+// Get notification type badge color
+fn notification_typeBadge(type) {
+    if (type == "order") { return "<span style='background:#e6f7ff;color:#1890ff;padding:2px 8px;border-radius:4px;font-size:12px'>订单</span>" }
+    if (type == "payment") { return "<span style='background:#f6ffed;color:#52c41a;padding:2px 8px;border-radius:4px;font-size:12px'>支付</span>" }
+    if (type == "system") { return "<span style='background:#f0f0f0;color:#666;padding:2px 8px;border-radius:4px;font-size:12px'>系统</span>" }
+    if (type == "promotion") { return "<span style='background:#fff7e6;color:#fa8c16;padding:2px 8px;border-radius:4px;font-size:12px'>活动</span>" }
+    return "<span style='background:#f0f0f0;color:#666;padding:2px 8px;border-radius:4px;font-size:12px'>" + type + "</span>"
+}
