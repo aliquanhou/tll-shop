@@ -1,4 +1,4 @@
-﻿// TLL Mall - Main Entry
+// TLL Mall - Main Entry
 // Commercial-grade B2C mall built entirely in TLL
 
 from "./core/database" import db_open, db_close, db_exec, db_query, db_queryOne, db_insert, db_begin, db_commit, db_rollback, db_get, db_release
