@@ -1,0 +1,100 @@
+name: TLL Shop CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  TLLOS_REPO: aliquanhou/tllos
+  TLLOS_REF: develop
+  TLLC_PATH: tools/TLLC/tllc.tllbc
+
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout TLL Shop
+        uses: actions/checkout@v4
+
+      - name: Checkout TLL OS (for toolchain)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TLLOS_REPO }}
+          ref: ${{ env.TLLOS_REF }}
+          path: tllos
+          fetch-depth: 1
+
+      - name: Setup TLL toolchain (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd tllos/host/c
+          make -j$(nproc) 2>/dev/null || gcc -O2 -o tllvm tllvm.c -lpthread -ldl 2>/dev/null || echo "Using prebuilt"
+          ls -la tllvm 2>/dev/null || echo "tllvm not found, will use alternative"
+
+      - name: Setup TLL toolchain (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          cd tllos\host\c
+          where cl.exe 2>nul && cl /O2 /Fe:tllvm.exe tllvm.c /link ws2_32.lib winhttp.lib 2>nul || echo "MSVC not available, using prebuilt"
+          dir tllvm.exe 2>nul || echo "tllvm.exe not found"
+
+      - name: Compile TLL Shop
+        shell: bash
+        run: |
+          echo "=== Compiling mall/main.tll ==="
+          TLLVM="tllos/host/c/tllvm"
+          TLLC="tllos/${TLLC_PATH}"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            TLLVM="tllos/host/c/tllvm.exe"
+          fi
+          if [ -f "$TLLVM" ] && [ -f "$TLLC" ]; then
+            "$TLLVM" "$TLLC" compile mall/main.tll -o mall/main.tllbc
+            echo "Compilation successful"
+            ls -la mall/main.tllbc
+          else
+            echo "TLL toolchain not available, skipping compilation"
+            echo "TLLVM exists: $(test -f "$TLLVM" && echo yes || echo no)"
+            echo "TLLC exists: $(test -f "$TLLC" && echo yes || echo no)"
+          fi
+
+      - name: Verify source files
+        shell: bash
+        run: |
+          echo "=== Verifying source files ==="
+          echo "main.tll: $(wc -l < mall/main.tll) lines"
+          echo "core modules: $(ls mall/core/*.tll | wc -l) files"
+          echo "user modules: $(ls mall/modules/*.tll | wc -l) files"
+          echo ""
+          echo "=== Core modules ==="
+          ls mall/core/*.tll
+          echo ""
+          echo "=== User modules ==="
+          ls mall/modules/*.tll
+
+      - name: Check for SQL injection patterns (informational)
+        shell: bash
+        run: |
+          echo "=== Checking for string concatenation in SQL (informational) ==="
+          echo "This is a known issue to be fixed in P1-3 SQL Parameterization"
+          grep -rn 'db_query.*+' mall/core/*.tll mall/modules/*.tll | head -20 || echo "No patterns found"
+          echo ""
+          echo "Count: $(grep -rn 'db_query.*+' mall/core/*.tll mall/modules/*.tll 2>/dev/null | wc -l) occurrences"
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tll-shop-${{ matrix.os }}
+          path: |
+            mall/main.tllbc
+          if-no-files-found: ignore

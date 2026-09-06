@@ -1,0 +1,67 @@
+# === TLL 编译产物 ===
+*.tllbc
+*.tllb
+
+# === 数据库文件 ===
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# === 日志文件 ===
+*.log
+*.err
+*.out
+
+# === 临时文件 ===
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# === 调试脚本 ===
+debug_*.tll
+test_*.tll
+fix_*.py
+check_*.py
+verify_*.py
+
+# === 系统文件 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === 运行时数据 ===
+mall/data/
+*.pid
+*.sock
+
+# === 凭证（禁止提交） ===
+*.pem
+*.key
+*.crt
+*.p12
+.env
+.env.*
+credentials.json
+secrets.json
+
+# === 部署临时 ===
+deploy/shop/main.tllbc
+deploy/shop/tllvm.exe
+deploy/shop/*.db
+
+# === 构建目录 ===
+build/
+dist/
+out/
