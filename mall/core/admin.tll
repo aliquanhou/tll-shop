@@ -174,10 +174,10 @@ fn admin_registerRoutes(router, db) {
         if (authResult != null) { return authResult }
 
         let orderId = convert.toInt(req.params.id)
-        let order = db_queryOne(req.db, "SELECT o.*, u.username FROM orders o LEFT JOIN users u ON o.user_id=u.id WHERE o.id=" + convert.toString(orderId))
+        let order = db_queryOne(req.db, "SELECT o.*, u.username FROM orders o LEFT JOIN users u ON o.user_id=u.id WHERE o.id = ?", [orderId])
         if (order == null) { return res_notFound("订单不存在") }
 
-        let items = db_query(req.db, "SELECT * FROM order_items WHERE order_id=" + convert.toString(orderId))
+        let items = db_query(req.db, "SELECT * FROM order_items WHERE order_id = ?", [orderId])
         let itemsHtml = ""
         let i = 0
         while (i < arrays.length(items)) {
@@ -205,7 +205,7 @@ fn admin_registerRoutes(router, db) {
         let authResult = admin_checkAuth(req)
         if (authResult != null) { return authResult }
         let orderId = convert.toInt(req.params.id)
-        db_exec(req.db, "UPDATE orders SET status='shipped', shipping_status='shipped', shipped_at=datetime('now') WHERE id=" + convert.toString(orderId))
+        db_exec(req.db, "UPDATE orders SET status='shipped', shipping_status='shipped', shipped_at=datetime('now') WHERE id = ?", [orderId])
         return res_redirect("/admin/orders")
     })
 
