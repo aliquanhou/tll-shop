@@ -1,0 +1,54 @@
+// TLL Mall - After Sales Page - Minimal Version (list only)
+
+from "./database" import db_query, db_queryOne
+from "./router" import router_get, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn aftersale_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn aftersale_getByUser(db, userId) {
+    return db_query(db, "SELECT a.*, o.order_no FROM after_sales a LEFT JOIN orders o ON a.order_id = o.id WHERE a.user_id = ? ORDER BY a.id DESC LIMIT 20", [userId])
+}
+
+fn aftersale_registerRoutes(router) {
+    router_get(router, "/aftersales", fn(req) {
+        let authResult = aftersale_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userId = req.currentUser.id
+        let aftersales = aftersale_getByUser(req.db, userId)
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(aftersales)) {
+            let a = aftersales[i]
+            listHtml = listHtml +
+                "<div style='padding:16px;background:#fff;margin-bottom:8px;border-radius:4px'>" +
+                "<div>订单号：" + a.order_no + "</div>" +
+                "<div>原因：" + a.reason + "</div>" +
+                "<div>金额：" + convert.toString(a.amount) + "</div>" +
+                "<div>状态：" + a.status + "</div>" +
+                "<div>时间：" + a.created_at + "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(aftersales) == 0) {
+            listHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff'>暂无售后记录</div>"
+        }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px'><h1 style='margin:0;font-size:18px'>售后管理</h1></div>" +
+            "<div style='max-width:800px;margin:0 auto'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>售后管理</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}
