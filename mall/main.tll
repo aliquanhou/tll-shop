@@ -26,6 +26,7 @@ from "./core/member_level_page" import memberlevel_registerRoutes
 from "./core/realname_page" import realname_registerRoutes
 from "./core/seckill_page" import seckill_registerRoutes
 from "./core/group_buy_page" import groupbuy_registerRoutes
+from "./core/coupon_page" import coupon_registerRoutes
 from "./core/payment" import payment_registerAll, payment_initTables
 from "./core/icp" import icp_registerAll, icp_initTables
 from "./core/agreement" import agreement_registerAll, agreement_initTables
@@ -710,6 +711,7 @@ memberlevel_registerRoutes(mallRouter)
 realname_registerRoutes(mallRouter)
 seckill_registerRoutes(mallRouter)
 groupbuy_registerRoutes(mallRouter)
+coupon_registerRoutes(mallRouter)
 payment_registerAll(mallRouter)
 icp_registerAll(mallRouter)
 agreement_registerAll(mallRouter)
