@@ -1,0 +1,84 @@
+// TLL Mall - Analytics Module
+// Sales, order, user and product statistics
+
+from "./database" import db_query, db_queryOne
+
+// Get overview statistics
+fn analytics_getOverview(db) {
+    let totalProducts = db_queryOne(db, "SELECT COUNT(*) as cnt FROM products")
+    let totalOrders = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders")
+    let totalUsers = db_queryOne(db, "SELECT COUNT(*) as cnt FROM users")
+    let totalSales = db_queryOne(db, "SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status IN ('paid','shipped','completed')")
+    let todayOrders = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE DATE(created_at) = DATE('now')")
+    let todaySales = db_queryOne(db, "SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status IN ('paid','shipped','completed') AND DATE(created_at) = DATE('now')")
+    let pendingOrders = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status='pending'")
+    let lowStock = db_queryOne(db, "SELECT COUNT(*) as cnt FROM products WHERE stock < 10")
+    return {
+        totalProducts: totalProducts.cnt,
+        totalOrders: totalOrders.cnt,
+        totalUsers: totalUsers.cnt,
+        totalSales: totalSales.total,
+        todayOrders: todayOrders.cnt,
+        todaySales: todaySales.total,
+        pendingOrders: pendingOrders.cnt,
+        lowStock: lowStock.cnt
+    }
+}
+
+// Get sales trend for last N days
+fn analytics_getSalesTrend(db, days) {
+    let sql = "SELECT DATE(created_at) as date, COALESCE(SUM(total_amount),0) as sales, COUNT(*) as orders FROM orders WHERE status IN ('paid','shipped','completed') AND created_at >= DATE('now', '" + convert.toString(days) + " days') GROUP BY DATE(created_at) ORDER BY date ASC"
+    return db_query(db, sql)
+}
+
+// Get order status distribution
+fn analytics_getOrderDistribution(db) {
+    let pending = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status='pending'")
+    let paid = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status='paid'")
+    let shipped = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status='shipped'")
+    let completed = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status='completed'")
+    let cancelled = db_queryOne(db, "SELECT COUNT(*) as cnt FROM orders WHERE status='cancelled'")
+    return {
+        pending: pending.cnt,
+        paid: paid.cnt,
+        shipped: shipped.cnt,
+        completed: completed.cnt,
+        cancelled: cancelled.cnt
+    }
+}
+
+// Get top products by sales
+fn analytics_getTopProducts(db, limit) {
+    let sql = "SELECT p.id, p.name, p.price, COALESCE(SUM(oi.quantity),0) as sold, COALESCE(SUM(oi.quantity * oi.price),0) as revenue FROM products p LEFT JOIN order_items oi ON p.id = oi.product_id GROUP BY p.id ORDER BY revenue DESC LIMIT " + convert.toString(limit)
+    return db_query(db, sql)
+}
+
+// Get recent orders
+fn analytics_getRecentOrders(db, limit) {
+    let sql = "SELECT id, order_no, total_amount, status, created_at FROM orders ORDER BY id DESC LIMIT " + convert.toString(limit)
+    return db_query(db, sql)
+}
+
+// Get low stock products
+fn analytics_getLowStockProducts(db, threshold) {
+    let sql = "SELECT id, name, stock, price FROM products WHERE stock < " + convert.toString(threshold) + " ORDER BY stock ASC"
+    return db_query(db, sql)
+}
+
+// Get payment method distribution
+fn analytics_getPaymentDistribution(db) {
+    let wechat = db_queryOne(db, "SELECT COUNT(*) as cnt FROM payments WHERE method='wechat' AND status='success'")
+    let alipay = db_queryOne(db, "SELECT COUNT(*) as cnt FROM payments WHERE method='alipay' AND status='success'")
+    let balance = db_queryOne(db, "SELECT COUNT(*) as cnt FROM payments WHERE method='balance' AND status='success'")
+    return {
+        wechat: wechat.cnt,
+        alipay: alipay.cnt,
+        balance: balance.cnt
+    }
+}
+
+// Get user growth for last N days
+fn analytics_getUserGrowth(db, days) {
+    let sql = "SELECT DATE(created_at) as date, COUNT(*) as new_users FROM users WHERE created_at >= DATE('now', '" + convert.toString(days) + " days') GROUP BY DATE(created_at) ORDER BY date ASC"
+    return db_query(db, sql)
+}

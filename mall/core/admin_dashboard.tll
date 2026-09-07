@@ -1,0 +1,195 @@
+// TLL Mall - Enhanced Admin Dashboard
+// Analytics dashboard with charts, statistics and recent data
+
+from "./database" import db_query, db_queryOne
+from "./router" import router_get, res_html, res_redirect
+from "./auth" import auth_currentUser, cookie_getSessionId
+from "./admin_layout" import admin_layout_sidebar, admin_layout_css
+from "./analytics" import analytics_getOverview, analytics_getSalesTrend, analytics_getOrderDistribution, analytics_getTopProducts, analytics_getRecentOrders, analytics_getLowStockProducts
+
+// Admin HTML template
+fn dashboard_page(title, body) {
+    return "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>" + title + " - TLL OS 商城后台</title><style>" +
+        admin_layout_css() +
+        ".stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}" +
+        ".stat-card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}" +
+        ".stat-card .number{font-size:28px;font-weight:bold;color:#1890ff}" +
+        ".stat-card .label{font-size:14px;color:#666;margin-top:8px}" +
+        ".stat-card.warning .number{color:#faad14}" +
+        ".stat-card.success .number{color:#52c41a}" +
+        ".stat-card.danger .number{color:#ff4d4f}" +
+        ".chart-container{background:#fff;border-radius:8px;padding:20px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}" +
+        ".chart-title{font-size:16px;font-weight:bold;margin-bottom:16px;color:#333}" +
+        ".bar-chart{display:flex;align-items:flex-end;height:200px;gap:12px;padding:10px 0}" +
+        ".bar-item{flex:1;display:flex;flex-direction:column;align-items:center}" +
+        ".bar{width:100%;background:linear-gradient(180deg,#1890ff,#096dd9);border-radius:4px 4px 0 0;min-height:4px;position:relative}" +
+        ".bar-value{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;color:#666}" +
+        ".bar-label{font-size:11px;color:#999;margin-top:8px}" +
+        ".data-table{width:100%;border-collapse:collapse}" +
+        ".data-table th{background:#fafafa;padding:12px;text-align:left;font-size:13px;color:#666;border-bottom:2px solid #f0f0f0}" +
+        ".data-table td{padding:12px;font-size:13px;color:#333;border-bottom:1px solid #f0f0f0}" +
+        ".badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px}" +
+        ".badge-pending{background:#fff7e6;color:#fa8c16}" +
+        ".badge-paid{background:#e6f7ff;color:#1890ff}" +
+        ".badge-shipped{background:#f6ffed;color:#52c41a}" +
+        ".badge-completed{background:#f9f0ff;color:#722ed1}" +
+        ".badge-cancelled{background:#fff1f0;color:#ff4d4f}" +
+        ".two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}" +
+        ".dist-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5}" +
+        ".dist-label{color:#666;font-size:13px}" +
+        ".dist-value{font-weight:bold;color:#333;font-size:13px}" +
+        "</style></head><body>" + body + "</body></html>"
+}
+
+// Admin auth check
+fn dashboard_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login?redirect=/admin/dashboard")
+    }
+    if (user.role != "admin") {
+        return res_html("<html><body><h1>403 Forbidden</h1><p>需要管理员权限</p><a href='/'>返回首页</a></body></html>", 403)
+    }
+    req.currentUser = user
+    return null
+}
+
+// Generate sales trend bar chart HTML
+fn dashboard_salesBarChart(trend) {
+    let html = "<div class='bar-chart'>"
+    let maxSales = 0
+    let i = 0
+    // First pass: find max sales for scaling
+    while (i < arrays.length(trend)) {
+        let item = trend[i]
+        if (item.sales > maxSales) { maxSales = item.sales }
+        i = i + 1
+    }
+    if (maxSales == 0) { maxSales = 1 }
+    i = 0
+    while (i < arrays.length(trend)) {
+        let item = trend[i]
+        let heightPct = (item.sales / maxSales) * 160
+        let heightStr = convert.toString(heightPct)
+        let salesStr = convert.toString(item.sales)
+        html = html + "<div class='bar-item'><div class='bar' style='height:" + heightStr + "px'><div class='bar-value'>¥" + salesStr + "</div></div><div class='bar-label'>" + item.date + "</div></div>"
+        i = i + 1
+    }
+    html = html + "</div>"
+    return html
+}
+
+// Generate order status badge
+fn dashboard_orderBadge(status) {
+    if (status == "pending") { return "<span class='badge badge-pending'>待付款</span>" }
+    if (status == "paid") { return "<span class='badge badge-paid'>已付款</span>" }
+    if (status == "shipped") { return "<span class='badge badge-shipped'>已发货</span>" }
+    if (status == "completed") { return "<span class='badge badge-completed'>已完成</span>" }
+    if (status == "cancelled") { return "<span class='badge badge-cancelled'>已取消</span>" }
+    return "<span class='badge'>" + status + "</span>"
+}
+
+// Register enhanced dashboard routes
+fn dashboard_registerRoutes(router) {
+    router_get(router, "/admin/dashboard", fn(req) {
+        let authResult = dashboard_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        // Get overview statistics
+        let overview = analytics_getOverview(req.db)
+        let totalSalesStr = convert.toString(overview.totalSales)
+        let totalOrdersStr = convert.toString(overview.totalOrders)
+        let totalUsersStr = convert.toString(overview.totalUsers)
+        let lowStockStr = convert.toString(overview.lowStock)
+
+        // Get sales trend
+        let trend = analytics_getSalesTrend(req.db, 7)
+        let salesChart = dashboard_salesBarChart(trend)
+
+        // Get order distribution
+        let dist = analytics_getOrderDistribution(req.db)
+        let pendingStr = convert.toString(dist.pending)
+        let paidStr = convert.toString(dist.paid)
+        let shippedStr = convert.toString(dist.shipped)
+        let completedStr = convert.toString(dist.completed)
+        let cancelledStr = convert.toString(dist.cancelled)
+
+        // Get top products
+        let topProducts = analytics_getTopProducts(req.db, 5)
+        let productsHtml = ""
+        let pi = 0
+        while (pi < arrays.length(topProducts)) {
+            let p = topProducts[pi]
+            let soldStr = convert.toString(p.sold)
+            let revenueStr = convert.toString(p.revenue)
+            productsHtml = productsHtml + "<tr><td>" + p.name + "</td><td>" + soldStr + "</td><td>¥" + revenueStr + "</td></tr>"
+            pi = pi + 1
+        }
+
+        // Get recent orders
+        let recentOrders = analytics_getRecentOrders(req.db, 10)
+        let ordersHtml = ""
+        let oi = 0
+        while (oi < arrays.length(recentOrders)) {
+            let o = recentOrders[oi]
+            let amountStr = convert.toString(o.total_amount)
+            ordersHtml = ordersHtml + "<tr><td>" + o.order_no + "</td><td>¥" + amountStr + "</td><td>" + dashboard_orderBadge(o.status) + "</td><td>" + o.created_at + "</td></tr>"
+            oi = oi + 1
+        }
+
+        // Get low stock products
+        let lowStockProducts = analytics_getLowStockProducts(req.db, 10)
+        let lowStockHtml = ""
+        let li = 0
+        while (li < arrays.length(lowStockProducts)) {
+            let lp = lowStockProducts[li]
+            let stockStr = convert.toString(lp.stock)
+            lowStockHtml = lowStockHtml + "<tr><td>" + lp.name + "</td><td style='color:#ff4d4f;font-weight:bold'>" + stockStr + "</td></tr>"
+            li = li + 1
+        }
+
+        let body = admin_layout_sidebar("dashboard") +
+            "<div class='main'>" +
+            "<div class='header'><h2>数据仪表盘</h2><span>欢迎, " + req.currentUser.username + "</span></div>" +
+
+            // Stat cards
+            "<div class='stat-grid'>" +
+            "<div class='stat-card success'><div class='number'>¥" + totalSalesStr + "</div><div class='label'>总销售额</div></div>" +
+            "<div class='stat-card'><div class='number'>" + totalOrdersStr + "</div><div class='label'>总订单数</div></div>" +
+            "<div class='stat-card'><div class='number'>" + totalUsersStr + "</div><div class='label'>用户总数</div></div>" +
+            "<div class='stat-card warning'><div class='number'>" + lowStockStr + "</div><div class='label'>库存预警</div></div>" +
+            "</div>" +
+
+            // Sales trend chart
+            "<div class='chart-container'><div class='chart-title'>近7天销售趋势</div>" + salesChart + "</div>" +
+
+            // Two column: order distribution + top products
+            "<div class='two-col'>" +
+            "<div class='chart-container'><div class='chart-title'>订单状态分布</div>" +
+            "<div class='dist-item'><span class='dist-label'>待付款</span><span class='dist-value'>" + pendingStr + "</span></div>" +
+            "<div class='dist-item'><span class='dist-label'>已付款</span><span class='dist-value'>" + paidStr + "</span></div>" +
+            "<div class='dist-item'><span class='dist-label'>已发货</span><span class='dist-value'>" + shippedStr + "</span></div>" +
+            "<div class='dist-item'><span class='dist-label'>已完成</span><span class='dist-value'>" + completedStr + "</span></div>" +
+            "<div class='dist-item'><span class='dist-label'>已取消</span><span class='dist-value'>" + cancelledStr + "</span></div>" +
+            "</div>" +
+            "<div class='chart-container'><div class='chart-title'>热销商品 TOP 5</div>" +
+            "<table class='data-table'><thead><tr><th>商品名称</th><th>销量</th><th>销售额</th></tr></thead><tbody>" + productsHtml + "</tbody></table>" +
+            "</div>" +
+            "</div>" +
+
+            // Recent orders
+            "<div class='chart-container'><div class='chart-title'>最近订单</div>" +
+            "<table class='data-table'><thead><tr><th>订单号</th><th>金额</th><th>状态</th><th>时间</th></tr></thead><tbody>" + ordersHtml + "</tbody></table>" +
+            "</div>" +
+
+            // Low stock warning
+            "<div class='chart-container'><div class='chart-title' style='color:#ff4d4f'>库存预警商品</div>" +
+            "<table class='data-table'><thead><tr><th>商品名称</th><th>库存</th></tr></thead><tbody>" + lowStockHtml + "</tbody></table>" +
+            "</div>" +
+
+            "</div>"
+
+        return res_html(dashboard_page("数据仪表盘", body))
+    })
+}
