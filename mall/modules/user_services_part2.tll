@@ -13,8 +13,8 @@ fn us_messagesPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let messages = db_query(db, "SELECT * FROM user_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", [currentUser.id])
-    let unreadCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_messages WHERE user_id = ? AND is_read = 0", [currentUser.id])
+    let messages = db_query(db, "SELECT * FROM user_messages WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at DESC LIMIT 50")
+    let unreadCount = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_messages WHERE user_id=" + convert.toString(currentUser.id) + " AND is_read=0")
     let html = "<div class='us-card' style='margin:12px;padding:12px;text-align:center;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff'><div style='font-size:24px;font-weight:bold'>" + convert.toString(unreadCount.cnt) + "</div><div style='font-size:12px;opacity:0.8'>未读消息</div></div>"
     if (arrays.length(messages) == 0) {
         html = html + "<div class='us-empty'><div class='us-empty-icon'>🔔</div><div class='us-empty-text'>暂无消息</div></div>"
@@ -42,8 +42,8 @@ fn us_messageDetail(req, messageId) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    db_exec(db, "UPDATE user_messages SET is_read = 1 WHERE id = ? AND user_id = ?", [messageId, currentUser.id])
-    let m = db_queryOne(db, "SELECT * FROM user_messages WHERE id = ? AND user_id = ?", [messageId, currentUser.id])
+    db_exec(db, "UPDATE user_messages SET is_read=1 WHERE id=" + convert.toString(messageId) + " AND user_id=" + convert.toString(currentUser.id))
+    let m = db_queryOne(db, "SELECT * FROM user_messages WHERE id=" + convert.toString(messageId) + " AND user_id=" + convert.toString(currentUser.id))
     let html = ""
     if (m == null) {
         html = "<div class='us-empty'><div class='us-empty-icon'>❓</div><div class='us-empty-text'>消息不存在</div></div>"
@@ -59,7 +59,7 @@ fn us_servicePage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let messages = db_query(db, "SELECT * FROM cs_messages WHERE user_id = ? ORDER BY created_at ASC LIMIT 100", [currentUser.id])
+    let messages = db_query(db, "SELECT * FROM cs_messages WHERE user_id=" + convert.toString(currentUser.id) + " ORDER BY created_at ASC LIMIT 100")
     let html = "<div style='padding:12px;height:calc(100vh - 120px);overflow-y:auto' id='chatArea'>"
     if (arrays.length(messages) == 0) {
         html = html + "<div class='us-empty'><div class='us-empty-icon'>💬</div><div class='us-empty-text'>暂无对话，开始咨询吧</div></div>"
@@ -90,10 +90,10 @@ fn us_serviceSend(req) {
     let body = req_getJsonBody(req)
     let db = req.db
     us_ensureTables(db)
-    db_exec(db, "INSERT INTO cs_messages (user_id, sender_type, content, session_id) VALUES (?, 'user', ?, ?)", [currentUser.id, body.content, 'sess-' + convert.toString(currentUser.id)])
+    db_exec(db, "INSERT INTO cs_messages (user_id, sender_type, content, session_id) VALUES (" + convert.toString(currentUser.id) + ", 'user', '" + body.content + "', 'sess-" + convert.toString(currentUser.id) + "')")
     // Auto reply
     let reply = "您好，感谢您的咨询！客服人员会尽快回复您。常见问题可查看帮助中心。"
-    db_exec(db, "INSERT INTO cs_messages (user_id, sender_type, content, session_id) VALUES (?, 'agent', ?, ?)", [currentUser.id, reply, 'sess-' + convert.toString(currentUser.id)])
+    db_exec(db, "INSERT INTO cs_messages (user_id, sender_type, content, session_id) VALUES (" + convert.toString(currentUser.id) + ", 'agent', '" + reply + "', 'sess-" + convert.toString(currentUser.id) + "')")
     return res_json({success: true})
 }
 
@@ -104,12 +104,9 @@ fn us_helpPage(req) {
     let db = req.db
     us_ensureTables(db)
     let category = req_getQuery(req, "category", "all")
-    let articles = null
-    if (category == "all") {
-        articles = db_query(db, "SELECT * FROM help_articles WHERE status = 'published' ORDER BY sort_order ASC, created_at DESC LIMIT 50")
-    } else {
-        articles = db_query(db, "SELECT * FROM help_articles WHERE status = 'published' AND category = ? ORDER BY sort_order ASC, created_at DESC LIMIT 50", [category])
-    }
+    let cond = "status='published'"
+    if (category != "all") { cond = cond + " AND category='" + category + "'" }
+    let articles = db_query(db, "SELECT * FROM help_articles WHERE " + cond + " ORDER BY sort_order ASC, created_at DESC LIMIT 50")
     let html = "<div class='us-tabs'>" +
         "<div class='us-tab " + us_tabClass(category, "all") + "' onclick=\"location.href='/user/help'\">全部</div>" +
         "<div class='us-tab " + us_tabClass(category, "common") + "' onclick=\"location.href='/user/help?category=common'\">常见问题</div>" +
@@ -142,7 +139,7 @@ fn us_helpDetail(req, articleId) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let a = db_queryOne(db, "SELECT * FROM help_articles WHERE id = ?", [articleId])
+    let a = db_queryOne(db, "SELECT * FROM help_articles WHERE id=" + convert.toString(articleId))
     let html = ""
     if (a == null) {
         html = "<div class='us-empty'><div class='us-empty-icon'>❓</div><div class='us-empty-text'>文章不存在</div></div>"
@@ -159,7 +156,7 @@ fn us_settingsPage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let userInfo = db_queryOne(db, "SELECT nickname, phone, email FROM users WHERE id = ?", [currentUser.id])
+    let userInfo = db_queryOne(db, "SELECT nickname, phone, email FROM users WHERE id=" + convert.toString(currentUser.id))
     let nickname = currentUser.username
     let phone = "未设置"
     let email = "未设置"
@@ -192,7 +189,7 @@ fn us_profilePage(req) {
     if (currentUser == null) { return res_redirect("/login") }
     let db = req.db
     us_ensureTables(db)
-    let userInfo = db_queryOne(db, "SELECT nickname, phone, email FROM users WHERE id = ?", [currentUser.id])
+    let userInfo = db_queryOne(db, "SELECT nickname, phone, email FROM users WHERE id=" + convert.toString(currentUser.id))
     let nickname = currentUser.username
     let phone = ""
     let email = ""
@@ -216,6 +213,6 @@ fn us_profileSubmit(req) {
     if (currentUser == null) { return res_json({success: false, error: "请先登录"}, 401) }
     let body = req_getJsonBody(req)
     let db = req.db
-    db_exec(db, "UPDATE users SET nickname = ?, phone = ?, email = ? WHERE id = ?", [body.nickname, body.phone, body.email, currentUser.id])
+    db_exec(db, "UPDATE users SET nickname='" + body.nickname + "', phone='" + body.phone + "', email='" + body.email + "' WHERE id=" + convert.toString(currentUser.id))
     return res_json({success: true})
 }

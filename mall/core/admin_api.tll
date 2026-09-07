@@ -50,9 +50,9 @@ fn api_registerProductRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id = ?", [id])
+        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id=" + convert.toString(id))
         if (product == null) { return api_error("Product not found", 404) }
-        let skus = db_query(req.db, "SELECT * FROM product_skus WHERE product_id = ?", [id])
+        let skus = db_query(req.db, "SELECT * FROM product_skus WHERE product_id=" + convert.toString(id))
         return api_success({product: product, skus: skus}, "Product detail")
     })
 
@@ -76,7 +76,7 @@ fn api_registerProductRoutes(router) {
         if (body.description != null) { description = api_escape(body.description) }
         let mainImage = ""
         if (body.main_image != null) { mainImage = api_escape(body.main_image) }
-        db_exec(req.db, "INSERT INTO products (name, price, stock, category_id, brand_id, status, description, main_image, sales, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)", [name, price, stock, categoryId, brandId, status, description, mainImage])
+        db_exec(req.db, "INSERT INTO products (name, price, stock, category_id, brand_id, status, description, main_image, sales, sort_order) VALUES ('" + name + "'," + convert.toString(price) + "," + convert.toString(stock) + "," + convert.toString(categoryId) + "," + convert.toString(brandId) + ",'" + status + "','" + description + "','" + mainImage + "',0,0)")
         return api_success(null, "Product created successfully")
     })
 
@@ -86,7 +86,7 @@ fn api_registerProductRoutes(router) {
         if (auth != null) { return auth }
         let id = req.params.id
         let body = req_getJsonBody(req)
-        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id = ?", [id])
+        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id=" + convert.toString(id))
         if (product == null) { return api_error("Product not found", 404) }
         let sets = []
         if (body.name != null) { sets.push("name='" + api_escape(body.name) + "'") }
@@ -108,8 +108,8 @@ fn api_registerProductRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM products WHERE id = ?", [id])
-        db_exec(req.db, "DELETE FROM product_skus WHERE product_id = ?", [id])
+        db_exec(req.db, "DELETE FROM products WHERE id=" + convert.toString(id))
+        db_exec(req.db, "DELETE FROM product_skus WHERE product_id=" + convert.toString(id))
         return api_success(null, "Product deleted successfully")
     })
 
@@ -118,11 +118,11 @@ fn api_registerProductRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id = ?", [id])
+        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id=" + convert.toString(id))
         if (product == null) { return api_error("Product not found", 404) }
         let newStatus = "off"
         if (product.status == "off") { newStatus = "on" }
-        db_exec(req.db, "UPDATE products SET status = ? WHERE id = ?", [newStatus, id])
+        db_exec(req.db, "UPDATE products SET status='" + newStatus + "' WHERE id=" + convert.toString(id))
         return api_success({status: newStatus}, "Product status toggled")
     })
 }
@@ -147,7 +147,7 @@ fn api_registerCategoryRoutes(router) {
         if (body.parent_id != null) { parentId = body.parent_id }
         let sortOrder = 0
         if (body.sort_order != null) { sortOrder = body.sort_order }
-        db_exec(req.db, "INSERT INTO categories (name, parent_id, sort_order, status) VALUES (?, ?, ?, 'active')", [name, parentId, sortOrder])
+        db_exec(req.db, "INSERT INTO categories (name, parent_id, sort_order, status) VALUES ('" + name + "'," + convert.toString(parentId) + "," + convert.toString(sortOrder) + ",'active')")
         return api_success(null, "Category created successfully")
     })
 
@@ -171,7 +171,7 @@ fn api_registerCategoryRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM categories WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM categories WHERE id=" + convert.toString(id))
         return api_success(null, "Category deleted successfully")
     })
 }
@@ -196,7 +196,7 @@ fn api_registerBrandRoutes(router) {
         if (body.logo != null) { logo = api_escape(body.logo) }
         let description = ""
         if (body.description != null) { description = api_escape(body.description) }
-        db_exec(req.db, "INSERT INTO brands (name, logo, description, sort_order, status) VALUES (?, ?, ?, 0, 'active')", [name, logo, description])
+        db_exec(req.db, "INSERT INTO brands (name, logo, description, sort_order, status) VALUES ('" + name + "','" + logo + "','" + description + "',0,'active')")
         return api_success(null, "Brand created successfully")
     })
 
@@ -220,7 +220,7 @@ fn api_registerBrandRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM brands WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM brands WHERE id=" + convert.toString(id))
         return api_success(null, "Brand deleted successfully")
     })
 }
@@ -240,9 +240,9 @@ fn api_registerOrderRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [id])
+        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(id))
         if (order == null) { return api_error("Order not found", 404) }
-        let items = db_query(req.db, "SELECT * FROM order_items WHERE order_id = ?", [id])
+        let items = db_query(req.db, "SELECT * FROM order_items WHERE order_id=" + convert.toString(id))
         return api_success({order: order, items: items}, "Order detail")
     })
 
@@ -256,7 +256,7 @@ fn api_registerOrderRoutes(router) {
         if (body.tracking_company != null) { trackingCompany = api_escape(body.tracking_company) }
         let trackingNumber = ""
         if (body.tracking_number != null) { trackingNumber = api_escape(body.tracking_number) }
-        db_exec(req.db, "UPDATE orders SET status='shipped', tracking_company = ?, tracking_number = ?, shipped_at=datetime('now') WHERE id = ?", [trackingCompany, trackingNumber, id])
+        db_exec(req.db, "UPDATE orders SET status='shipped', tracking_company='" + trackingCompany + "', tracking_number='" + trackingNumber + "', shipped_at=datetime('now') WHERE id=" + convert.toString(id))
         return api_success(null, "Order shipped successfully")
     })
 
@@ -265,20 +265,20 @@ fn api_registerOrderRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id = ?", [id])
+        let order = db_queryOne(req.db, "SELECT * FROM orders WHERE id=" + convert.toString(id))
         if (order == null) { return api_error("Order not found", 404) }
         // Rollback stock
-        let items = db_query(req.db, "SELECT * FROM order_items WHERE order_id = ?", [id])
+        let items = db_query(req.db, "SELECT * FROM order_items WHERE order_id=" + convert.toString(id))
         let i = 0
         while (i < arrays.length(items)) {
             let item = items[i]
             if (item.sku_id != null) {
-                db_exec(req.db, "UPDATE product_skus SET stock = stock + ? WHERE id = ?", [item.quantity, item.sku_id])
+                db_exec(req.db, "UPDATE product_skus SET stock=stock+" + convert.toString(item.quantity) + " WHERE id=" + convert.toString(item.sku_id))
             }
-            db_exec(req.db, "UPDATE products SET stock = stock + ?, sales = sales - ? WHERE id = ?", [item.quantity, item.quantity, item.product_id])
+            db_exec(req.db, "UPDATE products SET stock=stock+" + convert.toString(item.quantity) + ", sales=sales-" + convert.toString(item.quantity) + " WHERE id=" + convert.toString(item.product_id))
             i = i + 1
         }
-        db_exec(req.db, "UPDATE orders SET status='cancelled' WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE orders SET status='cancelled' WHERE id=" + convert.toString(id))
         return api_success(null, "Order cancelled, stock rolled back")
     })
 
@@ -287,7 +287,7 @@ fn api_registerOrderRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "UPDATE orders SET status='completed', completed_at=datetime('now') WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE orders SET status='completed', completed_at=datetime('now') WHERE id=" + convert.toString(id))
         return api_success(null, "Order completed successfully")
     })
 
@@ -299,7 +299,7 @@ fn api_registerOrderRoutes(router) {
         let body = req_getJsonBody(req)
         let remark = ""
         if (body.remark != null) { remark = api_escape(body.remark) }
-        db_exec(req.db, "UPDATE orders SET admin_remark = ? WHERE id = ?", [remark, id])
+        db_exec(req.db, "UPDATE orders SET admin_remark='" + remark + "' WHERE id=" + convert.toString(id))
         return api_success(null, "Order remark updated")
     })
 }
@@ -319,10 +319,10 @@ fn api_registerUserRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        let user = db_queryOne(req.db, "SELECT id, username, email, role, status, phone, created_at FROM users WHERE id = ?", [id])
+        let user = db_queryOne(req.db, "SELECT id, username, email, role, status, phone, created_at FROM users WHERE id=" + convert.toString(id))
         if (user == null) { return api_error("User not found", 404) }
-        let orders = db_query(req.db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ?", [id])
-        let addresses = db_query(req.db, "SELECT * FROM user_addresses WHERE user_id = ?", [id])
+        let orders = db_query(req.db, "SELECT COUNT(*) as cnt FROM orders WHERE user_id=" + convert.toString(id))
+        let addresses = db_query(req.db, "SELECT * FROM user_addresses WHERE user_id=" + convert.toString(id))
         return api_success({user: user, orderCount: orders[0].cnt, addresses: addresses}, "User detail")
     })
 
@@ -347,7 +347,7 @@ fn api_registerUserRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "UPDATE users SET status='disabled' WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE users SET status='disabled' WHERE id=" + convert.toString(id))
         return api_success(null, "User disabled")
     })
 
@@ -356,7 +356,7 @@ fn api_registerUserRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "UPDATE users SET status='active' WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE users SET status='active' WHERE id=" + convert.toString(id))
         return api_success(null, "User enabled")
     })
 
@@ -368,10 +368,10 @@ fn api_registerUserRoutes(router) {
         let body = req_getJsonBody(req)
         let amount = 0
         if (body.amount != null) { amount = body.amount }
-        let user = db_queryOne(req.db, "SELECT * FROM users WHERE id = ?", [id])
+        let user = db_queryOne(req.db, "SELECT * FROM users WHERE id=" + convert.toString(id))
         if (user == null) { return api_error("User not found", 404) }
-        db_exec(req.db, "UPDATE users SET balance = balance + ? WHERE id = ?", [amount, id])
-        db_exec(req.db, "INSERT INTO account_logs (user_id, type, amount, balance_after, description) VALUES (?, 'admin_adjust', ?, ?, 'Admin balance adjustment')", [id, amount, user.balance + amount])
+        db_exec(req.db, "UPDATE users SET balance=balance+" + convert.toString(amount) + " WHERE id=" + convert.toString(id))
+        db_exec(req.db, "INSERT INTO account_logs (user_id, type, amount, balance_after, description) VALUES (" + convert.toString(id) + ",'admin_adjust'," + convert.toString(amount) + "," + convert.toString(user.balance + amount) + ",'Admin balance adjustment')")
         return api_success(null, "Balance adjusted")
     })
 }
@@ -400,7 +400,7 @@ fn api_registerCouponRoutes(router) {
         if (body.min_amount != null) { minAmount = body.min_amount }
         let totalCount = 100
         if (body.total_count != null) { totalCount = body.total_count }
-        db_exec(req.db, "INSERT INTO coupons (name, type, value, min_amount, total_count, used_count, status) VALUES (?, ?, ?, ?, ?, 0, 'active')", [name, couponType, value, minAmount, totalCount])
+        db_exec(req.db, "INSERT INTO coupons (name, type, value, min_amount, total_count, used_count, status) VALUES ('" + name + "','" + couponType + "'," + convert.toString(value) + "," + convert.toString(minAmount) + "," + convert.toString(totalCount) + ",0,'active')")
         return api_success(null, "Coupon created successfully")
     })
 
@@ -424,7 +424,7 @@ fn api_registerCouponRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM coupons WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM coupons WHERE id=" + convert.toString(id))
         return api_success(null, "Coupon deleted successfully")
     })
 }
@@ -449,7 +449,7 @@ fn api_registerArticleRoutes(router) {
         if (body.content != null) { content = api_escape(body.content) }
         let category = "news"
         if (body.category != null) { category = body.category }
-        db_exec(req.db, "INSERT INTO articles (title, content, category, status, view_count) VALUES (?, ?, ?, 'published', 0)", [title, content, category])
+        db_exec(req.db, "INSERT INTO articles (title, content, category, status, view_count) VALUES ('" + title + "','" + content + "','" + category + "','published',0)")
         return api_success(null, "Article created successfully")
     })
 
@@ -473,7 +473,7 @@ fn api_registerArticleRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM articles WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM articles WHERE id=" + convert.toString(id))
         return api_success(null, "Article deleted successfully")
     })
 }
@@ -496,7 +496,7 @@ fn api_registerAnnouncementRoutes(router) {
         let title = api_escape(body.title)
         let content = ""
         if (body.content != null) { content = api_escape(body.content) }
-        db_exec(req.db, "INSERT INTO announcements (title, content, status, sort_order) VALUES (?, ?, 'active', 0)", [title, content])
+        db_exec(req.db, "INSERT INTO announcements (title, content, status, sort_order) VALUES ('" + title + "','" + content + "','active',0)")
         return api_success(null, "Announcement created successfully")
     })
 
@@ -519,7 +519,7 @@ fn api_registerAnnouncementRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM announcements WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM announcements WHERE id=" + convert.toString(id))
         return api_success(null, "Announcement deleted successfully")
     })
 }
@@ -542,7 +542,7 @@ fn api_registerSensitiveRoutes(router) {
         let word = api_escape(body.word)
         let replaceWith = "***"
         if (body.replace_with != null) { replaceWith = api_escape(body.replace_with) }
-        db_exec(req.db, "INSERT INTO sensitive_words (word, replace_with, status) VALUES (?, ?, 'active')", [word, replaceWith])
+        db_exec(req.db, "INSERT INTO sensitive_words (word, replace_with, status) VALUES ('" + word + "','" + replaceWith + "','active')")
         return api_success(null, "Sensitive word created successfully")
     })
 
@@ -550,7 +550,7 @@ fn api_registerSensitiveRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM sensitive_words WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM sensitive_words WHERE id=" + convert.toString(id))
         return api_success(null, "Sensitive word deleted successfully")
     })
 }
@@ -577,7 +577,7 @@ fn api_registerMemberLevelRoutes(router) {
         if (body.discount != null) { discount = body.discount }
         let pointsRequired = 0
         if (body.points_required != null) { pointsRequired = body.points_required }
-        db_exec(req.db, "INSERT INTO member_levels (name, level_value, discount, points_required, status) VALUES (?, ?, ?, ?, 'active')", [name, levelValue, discount, pointsRequired])
+        db_exec(req.db, "INSERT INTO member_levels (name, level_value, discount, points_required, status) VALUES ('" + name + "'," + convert.toString(levelValue) + "," + convert.toString(discount) + "," + convert.toString(pointsRequired) + ",'active')")
         return api_success(null, "Member level created successfully")
     })
 
@@ -600,7 +600,7 @@ fn api_registerMemberLevelRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM member_levels WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM member_levels WHERE id=" + convert.toString(id))
         return api_success(null, "Member level deleted successfully")
     })
 }
@@ -626,7 +626,7 @@ fn api_registerDecorationRoutes(router) {
         if (body.page_type != null) { pageType = body.page_type }
         let content = ""
         if (body.content != null) { content = api_escape(body.content) }
-        db_exec(req.db, "INSERT INTO decoration_pages (name, page_type, content, status, sort_order) VALUES (?, ?, ?, 'active', 0)", [name, pageType, content])
+        db_exec(req.db, "INSERT INTO decoration_pages (name, page_type, content, status, sort_order) VALUES ('" + name + "','" + pageType + "','" + content + "','active',0)")
         return api_success(null, "Page created successfully")
     })
 
@@ -649,7 +649,7 @@ fn api_registerDecorationRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM decoration_pages WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM decoration_pages WHERE id=" + convert.toString(id))
         return api_success(null, "Page deleted successfully")
     })
 
@@ -670,7 +670,7 @@ fn api_registerDecorationRoutes(router) {
         if (body.image_url != null) { imageUrl = api_escape(body.image_url) }
         let linkUrl = ""
         if (body.link_url != null) { linkUrl = api_escape(body.link_url) }
-        db_exec(req.db, "INSERT INTO banners (title, image_url, link_url, status, sort_order) VALUES (?, ?, ?, 'active', 0)", [title, imageUrl, linkUrl])
+        db_exec(req.db, "INSERT INTO banners (title, image_url, link_url, status, sort_order) VALUES ('" + title + "','" + imageUrl + "','" + linkUrl + "','active',0)")
         return api_success(null, "Banner created successfully")
     })
 
@@ -694,7 +694,7 @@ fn api_registerDecorationRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM banners WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM banners WHERE id=" + convert.toString(id))
         return api_success(null, "Banner deleted successfully")
     })
 
@@ -715,7 +715,7 @@ fn api_registerDecorationRoutes(router) {
         if (body.icon != null) { icon = api_escape(body.icon) }
         let linkUrl = ""
         if (body.link_url != null) { linkUrl = api_escape(body.link_url) }
-        db_exec(req.db, "INSERT INTO nav_icons (name, icon, link_url, status, sort_order) VALUES (?, ?, ?, 'active', 0)", [name, icon, linkUrl])
+        db_exec(req.db, "INSERT INTO nav_icons (name, icon, link_url, status, sort_order) VALUES ('" + name + "','" + icon + "','" + linkUrl + "','active',0)")
         return api_success(null, "Nav icon created successfully")
     })
 
@@ -723,7 +723,7 @@ fn api_registerDecorationRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM nav_icons WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM nav_icons WHERE id=" + convert.toString(id))
         return api_success(null, "Nav icon deleted successfully")
     })
 }
@@ -748,7 +748,7 @@ fn api_registerPermissionRoutes(router) {
         let roleKey = api_escape(body.role_key)
         let description = ""
         if (body.description != null) { description = api_escape(body.description) }
-        db_exec(req.db, "INSERT INTO admin_roles (name, role_key, description, status) VALUES (?, ?, ?, 'active')", [name, roleKey, description])
+        db_exec(req.db, "INSERT INTO admin_roles (name, role_key, description, status) VALUES ('" + name + "','" + roleKey + "','" + description + "','active')")
         return api_success(null, "Role created successfully")
     })
 
@@ -771,7 +771,7 @@ fn api_registerPermissionRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM admin_roles WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM admin_roles WHERE id=" + convert.toString(id))
         return api_success(null, "Role deleted successfully")
     })
 
@@ -794,7 +794,7 @@ fn api_registerPermissionRoutes(router) {
         if (body.path != null) { path = api_escape(body.path) }
         let icon = ""
         if (body.icon != null) { icon = api_escape(body.icon) }
-        db_exec(req.db, "INSERT INTO admin_menus (name, parent_id, path, icon, sort_order, status) VALUES (?, ?, ?, ?, 0, 'active')", [name, parentId, path, icon])
+        db_exec(req.db, "INSERT INTO admin_menus (name, parent_id, path, icon, sort_order, status) VALUES ('" + name + "'," + convert.toString(parentId) + ",'" + path + "','" + icon + "',0,'active')")
         return api_success(null, "Menu created successfully")
     })
 
@@ -802,7 +802,7 @@ fn api_registerPermissionRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM admin_menus WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM admin_menus WHERE id=" + convert.toString(id))
         return api_success(null, "Menu deleted successfully")
     })
 
@@ -825,7 +825,7 @@ fn api_registerPermissionRoutes(router) {
         let roleId = 0
         if (body.role_id != null) { roleId = body.role_id }
         let hashed = hash_password(password)
-        db_exec(req.db, "INSERT INTO admin_users (username, password, real_name, role_id, status) VALUES (?, ?, ?, ?, 'active')", [username, hashed, realName, roleId])
+        db_exec(req.db, "INSERT INTO admin_users (username, password, real_name, role_id, status) VALUES ('" + username + "','" + hashed + "','" + realName + "'," + convert.toString(roleId) + ",'active')")
         return api_success(null, "Admin created successfully")
     })
 
@@ -833,7 +833,7 @@ fn api_registerPermissionRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM admin_users WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM admin_users WHERE id=" + convert.toString(id))
         return api_success(null, "Admin deleted successfully")
     })
 }
@@ -859,7 +859,7 @@ fn api_registerOrganizationRoutes(router) {
         if (body.parent_id != null) { parentId = body.parent_id }
         let leader = ""
         if (body.leader != null) { leader = api_escape(body.leader) }
-        db_exec(req.db, "INSERT INTO departments (name, parent_id, leader, sort_order, status) VALUES (?, ?, ?, 0, 'active')", [name, parentId, leader])
+        db_exec(req.db, "INSERT INTO departments (name, parent_id, leader, sort_order, status) VALUES ('" + name + "'," + convert.toString(parentId) + ",'" + leader + "',0,'active')")
         return api_success(null, "Department created successfully")
     })
 
@@ -882,7 +882,7 @@ fn api_registerOrganizationRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM departments WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM departments WHERE id=" + convert.toString(id))
         return api_success(null, "Department deleted successfully")
     })
 
@@ -903,7 +903,7 @@ fn api_registerOrganizationRoutes(router) {
         if (body.department_id != null) { departmentId = body.department_id }
         let positionCode = ""
         if (body.position_code != null) { positionCode = api_escape(body.position_code) }
-        db_exec(req.db, "INSERT INTO positions (name, department_id, position_code, sort_order, status) VALUES (?, ?, ?, 0, 'active')", [name, departmentId, positionCode])
+        db_exec(req.db, "INSERT INTO positions (name, department_id, position_code, sort_order, status) VALUES ('" + name + "'," + convert.toString(departmentId) + ",'" + positionCode + "',0,'active')")
         return api_success(null, "Position created successfully")
     })
 
@@ -911,7 +911,7 @@ fn api_registerOrganizationRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM positions WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM positions WHERE id=" + convert.toString(id))
         return api_success(null, "Position deleted successfully")
     })
 }
@@ -939,7 +939,7 @@ fn api_registerChannelRoutes(router) {
         if (body.menu_type != null) { menuType = body.menu_type }
         let menuValue = ""
         if (body.menu_value != null) { menuValue = api_escape(body.menu_value) }
-        db_exec(req.db, "INSERT INTO wechat_menus (name, parent_id, menu_type, menu_value, sort_order) VALUES (?, ?, ?, ?, 0)", [name, parentId, menuType, menuValue])
+        db_exec(req.db, "INSERT INTO wechat_menus (name, parent_id, menu_type, menu_value, sort_order) VALUES ('" + name + "'," + convert.toString(parentId) + ",'" + menuType + "','" + menuValue + "',0)")
         return api_success(null, "WeChat menu created successfully")
     })
 
@@ -947,7 +947,7 @@ fn api_registerChannelRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM wechat_menus WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM wechat_menus WHERE id=" + convert.toString(id))
         return api_success(null, "WeChat menu deleted successfully")
     })
 
@@ -967,7 +967,7 @@ fn api_registerChannelRoutes(router) {
         let keyword = api_escape(body.keyword)
         let replyContent = ""
         if (body.reply_content != null) { replyContent = api_escape(body.reply_content) }
-        db_exec(req.db, "INSERT INTO wechat_auto_replies (name, keyword, match_mode, reply_type, reply_content, status) VALUES (?, ?, 'exact', 'text', ?, 'active')", [name, keyword, replyContent])
+        db_exec(req.db, "INSERT INTO wechat_auto_replies (name, keyword, match_mode, reply_type, reply_content, status) VALUES ('" + name + "','" + keyword + "','exact','text','" + replyContent + "','active')")
         return api_success(null, "Auto reply created successfully")
     })
 
@@ -975,7 +975,7 @@ fn api_registerChannelRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM wechat_auto_replies WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM wechat_auto_replies WHERE id=" + convert.toString(id))
         return api_success(null, "Auto reply deleted successfully")
     })
 
@@ -993,7 +993,7 @@ fn api_registerChannelRoutes(router) {
         let body = req_getJsonBody(req)
         let name = api_escape(body.name)
         let channelCode = api_escape(body.channel_code)
-        db_exec(req.db, "INSERT INTO promotion_channels (name, channel_code, visit_count, register_count, order_count, status) VALUES (?, ?, 0, 0, 0, 'active')", [name, channelCode])
+        db_exec(req.db, "INSERT INTO promotion_channels (name, channel_code, visit_count, register_count, order_count, status) VALUES ('" + name + "','" + channelCode + "',0,0,0,'active')")
         return api_success(null, "Promotion channel created successfully")
     })
 
@@ -1001,7 +1001,7 @@ fn api_registerChannelRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "DELETE FROM promotion_channels WHERE id = ?", [id])
+        db_exec(req.db, "DELETE FROM promotion_channels WHERE id=" + convert.toString(id))
         return api_success(null, "Promotion channel deleted successfully")
     })
 }
@@ -1026,11 +1026,11 @@ fn api_registerSystemConfigRoutes(router) {
         while (i < arrays.length(keys)) {
             let key = keys[i]
             let value = api_escape(body[key])
-            let existing = db_queryOne(req.db, "SELECT * FROM system_config WHERE config_key = ?", [key])
+            let existing = db_queryOne(req.db, "SELECT * FROM system_config WHERE config_key='" + key + "'")
             if (existing == null) {
-                db_exec(req.db, "INSERT INTO system_config (config_key, config_value) VALUES (?, ?)", [key, value])
+                db_exec(req.db, "INSERT INTO system_config (config_key, config_value) VALUES ('" + key + "','" + value + "')")
             } else {
-                db_exec(req.db, "UPDATE system_config SET config_value = ? WHERE config_key = ?", [value, key])
+                db_exec(req.db, "UPDATE system_config SET config_value='" + value + "' WHERE config_key='" + key + "'")
             }
             i = i + 1
         }
@@ -1053,7 +1053,7 @@ fn api_registerMerchantRoutes(router) {
         let auth = api_checkAdmin(req)
         if (auth != null) { return auth }
         let id = req.params.id
-        db_exec(req.db, "UPDATE merchants SET status='approved' WHERE id = ?", [id])
+        db_exec(req.db, "UPDATE merchants SET status='approved' WHERE id=" + convert.toString(id))
         return api_success(null, "Merchant approved successfully")
     })
 
@@ -1064,7 +1064,7 @@ fn api_registerMerchantRoutes(router) {
         let body = req_getJsonBody(req)
         let reason = ""
         if (body.reason != null) { reason = api_escape(body.reason) }
-        db_exec(req.db, "UPDATE merchants SET status='rejected', reject_reason = ? WHERE id = ?", [reason, id])
+        db_exec(req.db, "UPDATE merchants SET status='rejected', reject_reason='" + reason + "' WHERE id=" + convert.toString(id))
         return api_success(null, "Merchant rejected")
     })
 }
