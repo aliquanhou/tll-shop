@@ -20,7 +20,7 @@ from "./core/notification_page_v3" import notification_registerRoutes
 from "./core/collection_page" import collection_registerRoutes
 from "./core/review_page" import review_registerRoutes
 from "./core/logistics_page" import logistics_registerRoutes
-from "./core/aftersale_page" import aftersale_registerRoutes
+from "./core/aftersale_page_v4" import aftersale_registerRoutes
 from "./core/article_page" import article_registerRoutes
 from "./core/member_level_page" import memberlevel_registerRoutes
 from "./core/realname_page" import realname_registerRoutes
