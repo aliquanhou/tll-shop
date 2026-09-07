@@ -432,6 +432,55 @@ fn schema_initAll(db) {
         FOREIGN KEY (coupon_id) REFERENCES coupons(id)
     )")
 
+
+    // === Marketing: Seckill Activities ===
+    db_exec(db, "CREATE TABLE IF NOT EXISTS seckill_activities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+    )")
+
+    // === Seckill Products ===
+    db_exec(db, "CREATE TABLE IF NOT EXISTS seckill_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        activity_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        seckill_price REAL NOT NULL,
+        original_price REAL DEFAULT 0,
+        stock INTEGER DEFAULT 0,
+        sold_count INTEGER DEFAULT 0,
+        limit_per_user INTEGER DEFAULT 1,
+        sort_order INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (activity_id) REFERENCES seckill_activities(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+    )")
+
+    // === Seckill Orders ===
+    db_exec(db, "CREATE TABLE IF NOT EXISTS seckill_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        activity_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        seckill_product_id INTEGER NOT NULL,
+        quantity INTEGER DEFAULT 1,
+        total_price REAL DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        order_no TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        paid_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (activity_id) REFERENCES seckill_activities(id),
+        FOREIGN KEY (product_id) REFERENCES products(id),
+        FOREIGN KEY (seckill_product_id) REFERENCES seckill_products(id)
+    )")
+
     // === Banners ===
     db_exec(db, "CREATE TABLE IF NOT EXISTS banners (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
