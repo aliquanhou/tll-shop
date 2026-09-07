@@ -1,0 +1,173 @@
+// TLL Mall - Product Collection Page (all functions inlined)
+
+from "./database" import db_exec, db_query, db_queryOne
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery, req_getJsonBody
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn collection_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login?redirect=/collections")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn collection_isCollected(db, userId, productId) {
+    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_collections WHERE user_id = ? AND product_id = ?", [userId, productId])
+    return result.cnt > 0
+}
+
+fn collection_add(db, userId, productId) {
+    if (collection_isCollected(db, userId, productId)) {
+        return true
+    }
+    db_exec(db, "INSERT INTO user_collections (user_id, product_id) VALUES (?, ?)", [userId, productId])
+    return true
+}
+
+fn collection_remove(db, userId, productId) {
+    db_exec(db, "DELETE FROM user_collections WHERE user_id = ? AND product_id = ?", [userId, productId])
+    return true
+}
+
+fn collection_getList(db, userId, page, pageSize) {
+    let p = 1
+    if (page != null) { p = page }
+    let ps = 20
+    if (pageSize != null) { ps = pageSize }
+    let offset = (p - 1) * ps
+    let offsetStr = convert.toString(offset)
+    let psStr = convert.toString(ps)
+    let sql = "SELECT c.*, p.name as product_name, p.price as product_price, p.image as product_image, p.stock as product_stock FROM user_collections c LEFT JOIN products p ON c.product_id = p.id WHERE c.user_id = ? ORDER BY c.id DESC LIMIT " + psStr + " OFFSET " + offsetStr
+    return db_query(db, sql, [userId])
+}
+
+fn collection_getTotal(db, userId) {
+    let result = db_queryOne(db, "SELECT COUNT(*) as cnt FROM user_collections WHERE user_id = ?", [userId])
+    return result.cnt
+}
+
+fn collection_page(title, body) {
+    return "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>" + title + " - TLL OS 商城</title><style>" +
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;background:#f5f5f5;color:#333}" +
+        ".header{background:#fff;padding:16px 24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);display:flex;justify-content:space-between;align-items:center}" +
+        ".header h1{margin:0;font-size:20px;color:#1890ff}" +
+        ".header a{color:#666;text-decoration:none;margin-left:16px}" +
+        ".container{max-width:1200px;margin:24px auto;padding:0 16px}" +
+        ".toolbar{background:#fff;padding:16px 24px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}" +
+        ".toolbar .stats{color:#666;font-size:14px}" +
+        ".toolbar .stats strong{color:#ff4d4f}" +
+        ".product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}" +
+        ".product-card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:transform 0.2s}" +
+        ".product-card:hover{transform:translateY(-2px)}" +
+        ".product-image{width:100%;height:200px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#999;font-size:14px}" +
+        ".product-info{padding:12px 16px}" +
+        ".product-name{font-size:14px;color:#333;margin-bottom:8px;line-height:1.4;height:40px;overflow:hidden}" +
+        ".product-price{font-size:18px;color:#ff4d4f;font-weight:bold;margin-bottom:8px}" +
+        ".product-actions{display:flex;gap:8px}" +
+        ".product-actions a{flex:1;text-align:center;padding:8px;background:#f5f5f5;color:#666;text-decoration:none;border-radius:4px;font-size:13px}" +
+        ".product-actions a.danger{background:#fff1f0;color:#ff4d4f}" +
+        ".product-actions a.primary{background:#1890ff;color:#fff}" +
+        ".empty{text-align:center;padding:80px 24px;color:#999;background:#fff;border-radius:8px}" +
+        ".empty .icon{font-size:64px;margin-bottom:16px}" +
+        ".empty a{display:inline-block;margin-top:16px;padding:10px 24px;background:#1890ff;color:#fff;text-decoration:none;border-radius:4px}" +
+        ".pagination{text-align:center;padding:16px;background:#fff;border-radius:8px;margin-top:16px}" +
+        ".pagination a{display:inline-block;padding:6px 12px;margin:0 4px;border:1px solid #d9d9d9;border-radius:4px;color:#666;text-decoration:none;font-size:13px}" +
+        ".pagination a.active{background:#1890ff;color:#fff;border-color:#1890ff}" +
+        ".pagination a.disabled{color:#ccc;cursor:not-allowed}" +
+        "</style></head><body>" + body + "</body></html>"
+}
+
+fn collection_registerRoutes(router) {
+    router_get(router, "/collections", fn(req) {
+        let authResult = collection_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userId = req.currentUser.id
+        let page = 1
+        let pageStr = req_getQuery(req, "page", "1")
+        page = convert.toInt(pageStr)
+        if (page < 1) { page = 1 }
+        let pageSize = 20
+
+        let collections = collection_getList(req.db, userId, page, pageSize)
+        let total = collection_getTotal(req.db, userId)
+        let totalPages = (total + pageSize - 1) / pageSize
+        if (totalPages < 1) { totalPages = 1 }
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(collections)) {
+            let c = collections[i]
+            let productName = "商品已下架"
+            if (c.product_name != null) { productName = c.product_name }
+            let productPrice = "0.00"
+            if (c.product_price != null) { productPrice = convert.toString(c.product_price) }
+            listHtml = listHtml +
+                "<div class='product-card'>" +
+                "<div class='product-image'>📦 " + productName + "</div>" +
+                "<div class='product-info'>" +
+                "<div class='product-name'>" + productName + "</div>" +
+                "<div class='product-price'>¥" + productPrice + "</div>" +
+                "<div class='product-actions'>" +
+                "<a href='/product/" + convert.toString(c.product_id) + "' class='primary'>查看</a>" +
+                "<a href='/collections/remove/" + convert.toString(c.product_id) + "' class='danger'>取消</a>" +
+                "</div></div></div>"
+            i = i + 1
+        }
+
+        if (arrays.length(collections) == 0) {
+            listHtml = "<div class='empty'><div class='icon'>❤️</div><div>还没有收藏任何商品</div><a href='/'>去逛逛</a></div>"
+        }
+
+        let paginationHtml = "<div class='pagination'>"
+        if (page > 1) {
+            paginationHtml = paginationHtml + "<a href='/collections?page=" + convert.toString(page - 1) + "'>上一页</a>"
+        } else {
+            paginationHtml = paginationHtml + "<a class='disabled'>上一页</a>"
+        }
+        let pi = 1
+        while (pi <= totalPages) {
+            let activeClass = ""
+            if (pi == page) { activeClass = " active" }
+            paginationHtml = paginationHtml + "<a href='/collections?page=" + convert.toString(pi) + "' class='" + activeClass + "'>" + convert.toString(pi) + "</a>"
+            pi = pi + 1
+        }
+        if (page < totalPages) {
+            paginationHtml = paginationHtml + "<a href='/collections?page=" + convert.toString(page + 1) + "'>下一页</a>"
+        } else {
+            paginationHtml = paginationHtml + "<a class='disabled'>下一页</a>"
+        }
+        paginationHtml = paginationHtml + "</div>"
+
+        let body =
+            "<div class='header'><h1>❤️ 我的收藏</h1><div><a href='/'>首页</a><a href='/user'>个人中心</a></div></div>" +
+            "<div class='container'>" +
+            "<div class='toolbar'>" +
+            "<div class='stats'>共收藏 <strong>" + convert.toString(total) + "</strong> 件商品</div>" +
+            "</div>" +
+            "<div class='product-grid'>" + listHtml + "</div>" +
+            paginationHtml +
+            "</div>"
+
+        return res_html(collection_page("我的收藏", body))
+    })
+
+    router_get(router, "/collections/add/:productId", fn(req) {
+        let authResult = collection_checkAuth(req)
+        if (authResult != null) { return authResult }
+        let productId = convert.toInt(req.params.productId)
+        collection_add(req.db, req.currentUser.id, productId)
+        return res_redirect("/collections")
+    })
+
+    router_get(router, "/collections/remove/:productId", fn(req) {
+        let authResult = collection_checkAuth(req)
+        if (authResult != null) { return authResult }
+        let productId = convert.toInt(req.params.productId)
+        collection_remove(req.db, req.currentUser.id, productId)
+        return res_redirect("/collections")
+    })
+}
