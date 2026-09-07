@@ -1,4 +1,4 @@
-// TLL Mall - After Sales Page - Version 4 (with status helpers and badges)
+// TLL Mall - After Sales Page - Test single helper function
 
 from "./database" import db_query, db_queryOne
 from "./router" import router_get, res_html, res_redirect, req_getQuery
@@ -16,27 +16,7 @@ fn aftersale_checkAuth(req) {
 
 fn aftersale_typeText(type) {
     if (type == "refund") { return "退款" }
-    if (type == "return") { return "退货退款" }
-    if (type == "exchange") { return "换货" }
     return type
-}
-
-fn aftersale_statusText(status) {
-    if (status == "pending") { return "待处理" }
-    if (status == "approved") { return "已同意" }
-    if (status == "rejected") { return "已拒绝" }
-    if (status == "completed") { return "已完成" }
-    if (status == "cancelled") { return "已取消" }
-    return status
-}
-
-fn aftersale_statusBadge(status) {
-    if (status == "pending") { return "<span style='background:#fff7e6;color:#fa8c16;padding:2px 8px;border-radius:4px;font-size:12px'>待处理</span>" }
-    if (status == "approved") { return "<span style='background:#e6f7ff;color:#1890ff;padding:2px 8px;border-radius:4px;font-size:12px'>已同意</span>" }
-    if (status == "rejected") { return "<span style='background:#fff1f0;color:#ff4d4f;padding:2px 8px;border-radius:4px;font-size:12px'>已拒绝</span>" }
-    if (status == "completed") { return "<span style='background:#f6ffed;color:#52c41a;padding:2px 8px;border-radius:4px;font-size:12px'>已完成</span>" }
-    if (status == "cancelled") { return "<span style='background:#f0f0f0;color:#999;padding:2px 8px;border-radius:4px;font-size:12px'>已取消</span>" }
-    return "<span style='background:#f0f0f0;color:#666;padding:2px 8px;border-radius:4px;font-size:12px'>" + status + "</span>"
 }
 
 fn aftersale_getByUser(db, userId) {
@@ -44,11 +24,7 @@ fn aftersale_getByUser(db, userId) {
 }
 
 fn aftersale_getById(db, id, userId) {
-    return db_queryOne(db, "SELECT a.*, o.order_no, o.total_amount, o.address_name, o.address_phone, o.address_detail FROM after_sales a LEFT JOIN orders o ON a.order_id = o.id WHERE a.id = ? AND a.user_id = ?", [id, userId])
-}
-
-fn aftersale_getOrderItems(db, orderId) {
-    return db_query(db, "SELECT oi.*, p.name as product_name FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?", [orderId])
+    return db_queryOne(db, "SELECT a.*, o.order_no, o.total_amount FROM after_sales a LEFT JOIN orders o ON a.order_id = o.id WHERE a.id = ? AND a.user_id = ?", [id, userId])
 }
 
 fn aftersale_registerRoutes(router) {
@@ -64,17 +40,12 @@ fn aftersale_registerRoutes(router) {
         while (i < arrays.length(aftersales)) {
             let a = aftersales[i]
             listHtml = listHtml +
-                "<a href='/aftersale/" + convert.toString(a.id) + "' style='text-decoration:none;color:inherit;display:block;padding:16px;background:#fff;margin-bottom:8px;border-radius:4px'>" +
-                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>" +
-                "<span style='color:#666;font-size:13px'>订单号：" + a.order_no + "</span>" +
-                aftersale_statusBadge(a.status) +
-                "</div>" +
-                "<div style='margin-bottom:4px'><strong>" + aftersale_typeText(a.type) + "</strong>：" + a.reason + "</div>" +
-                "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:8px'>" +
-                "<span style='color:#ff4d4f;font-weight:bold'>¥" + convert.toString(a.amount) + "</span>" +
-                "<span style='color:#999;font-size:12px'>" + a.created_at + "</span>" +
-                "</div>" +
-                "</a>"
+                "<div style='padding:16px;background:#fff;margin-bottom:8px'>" +
+                "<div>订单号：" + a.order_no + "</div>" +
+                "<div>类型：" + aftersale_typeText(a.type) + "</div>" +
+                "<div>原因：" + a.reason + "</div>" +
+                "<div>状态：" + a.status + "</div>" +
+                "</div>"
             i = i + 1
         }
 
@@ -82,10 +53,7 @@ fn aftersale_registerRoutes(router) {
             listHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff'>暂无售后记录</div>"
         }
 
-        let body =
-            "<div style='padding:16px;background:#fff;margin-bottom:16px'><h1 style='margin:0;font-size:18px'>售后管理</h1></div>" +
-            "<div style='max-width:800px;margin:0 auto'>" + listHtml + "</div>"
-
+        let body = "<div style='padding:16px;background:#fff'><h1 style='margin:0;font-size:18px'>售后管理</h1></div><div style='max-width:800px;margin:16px auto'>" + listHtml + "</div>"
         return res_html("<html><head><meta charset='utf-8'><title>售后管理</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
     })
 
@@ -99,44 +67,15 @@ fn aftersale_registerRoutes(router) {
             return res_redirect("/aftersales")
         }
 
-        let items = aftersale_getOrderItems(req.db, aftersale.order_id)
-        let itemsHtml = ""
-        let j = 0
-        while (j < arrays.length(items)) {
-            let item = items[j]
-            let productName = "商品"
-            if (item.product_name != null) { productName = item.product_name }
-            itemsHtml = itemsHtml +
-                "<div style='padding:8px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between'>" +
-                "<span>" + productName + "</span>" +
-                "<span>¥" + convert.toString(item.price) + " x" + convert.toString(item.quantity) + "</span>" +
-                "</div>"
-            j = j + 1
-        }
-
-        let processedAt = "待处理"
-        if (aftersale.processed_at != null) { processedAt = aftersale.processed_at }
-
         let body =
-            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
-            "<h1 style='margin:0;font-size:18px'>售后详情</h1>" +
-            aftersale_statusBadge(aftersale.status) +
-            "</div>" +
-            "<div style='max-width:800px;margin:0 auto;background:#fff;padding:24px;border-radius:4px'>" +
-            "<div style='margin-bottom:12px'><strong>订单号：</strong>" + aftersale.order_no + "</div>" +
-            "<div style='margin-bottom:12px'><strong>售后类型：</strong>" + aftersale_typeText(aftersale.type) + "</div>" +
-            "<div style='margin-bottom:12px'><strong>售后原因：</strong>" + aftersale.reason + "</div>" +
-            "<div style='margin-bottom:12px'><strong>退款金额：</strong><span style='color:#ff4d4f;font-weight:bold'>¥" + convert.toString(aftersale.amount) + "</span></div>" +
-            "<div style='margin-bottom:12px'><strong>订单金额：</strong>¥" + convert.toString(aftersale.total_amount) + "</div>" +
-            "<div style='margin-bottom:12px'><strong>当前状态：</strong>" + aftersale_statusText(aftersale.status) + "</div>" +
-            "<div style='margin-bottom:12px'><strong>申请时间：</strong>" + aftersale.created_at + "</div>" +
-            "<div style='margin-bottom:12px'><strong>处理时间：</strong>" + processedAt + "</div>" +
-            "<div style='margin-top:24px;margin-bottom:12px'><strong>收货信息：</strong></div>" +
-            "<div style='margin-bottom:8px'>" + aftersale.address_name + " " + aftersale.address_phone + "</div>" +
-            "<div style='margin-bottom:12px'>" + aftersale.address_detail + "</div>" +
-            "<div style='margin-top:24px;margin-bottom:12px'><strong>订单商品：</strong></div>" +
-            itemsHtml +
-            "<div style='margin-top:24px'><a href='/aftersales' style='color:#1890ff;text-decoration:none'>返回列表</a></div>" +
+            "<div style='padding:16px;background:#fff'><h1 style='margin:0;font-size:18px'>售后详情</h1></div>" +
+            "<div style='max-width:800px;margin:16px auto;background:#fff;padding:24px'>" +
+            "<div>订单号：" + aftersale.order_no + "</div>" +
+            "<div>类型：" + aftersale_typeText(aftersale.type) + "</div>" +
+            "<div>原因：" + aftersale.reason + "</div>" +
+            "<div>金额：" + convert.toString(aftersale.amount) + "</div>" +
+            "<div>状态：" + aftersale.status + "</div>" +
+            "<div style='margin-top:16px'><a href='/aftersales'>返回列表</a></div>" +
             "</div>"
 
         return res_html("<html><head><meta charset='utf-8'><title>售后详情</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
