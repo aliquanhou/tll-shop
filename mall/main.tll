@@ -16,7 +16,7 @@ from "./core/admin_new_modules" import new_modules_registerAll
 from "./core/admin_missing_pages" import admin_missing_registerAll
 from "./core/admin_api" import api_registerAll
 from "./core/admin_dashboard" import dashboard_registerRoutes
-from "./core/notification_page" import notification_registerRoutes
+from "./core/notification_page_v3" import notification_registerRoutes
 from "./core/collection_page" import collection_registerRoutes
 from "./core/review_page" import review_registerRoutes
 from "./core/logistics_page" import logistics_registerRoutes
