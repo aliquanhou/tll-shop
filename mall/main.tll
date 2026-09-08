@@ -26,6 +26,7 @@ from "./core/points_mall_page" import points_mall_registerRoutes
 from "./core/shein_home_page" import shein_home_registerRoutes
 from "./core/shein_product_page" import shein_product_registerRoutes
 from "./core/shein_cart_page" import shein_cart_registerRoutes
+from "./core/shein_user_page" import shein_user_registerRoutes
 from "./core/article_page" import article_registerRoutes
 from "./core/member_level_page" import memberlevel_registerRoutes
 from "./core/realname_page" import realname_registerRoutes
@@ -716,6 +717,7 @@ points_mall_registerRoutes(mallRouter)
 shein_home_registerRoutes(mallRouter)
 shein_product_registerRoutes(mallRouter)
 shein_cart_registerRoutes(mallRouter)
+shein_user_registerRoutes(mallRouter)
 article_registerRoutes(mallRouter)
 memberlevel_registerRoutes(mallRouter)
 realname_registerRoutes(mallRouter)
