@@ -10,8 +10,8 @@ on:
 env:
   # === 固定 TLL OS Toolchain（禁止随 develop 漂移）===
   TLLOS_REPO: aliquanhou/tllos
-  TLLOS_REF: 8013a7f
-  TLLOS_COMMIT: 8013a7f
+  TLLOS_REF: 8013a7fab2f421a63a43c7b95c2e645a03689ad0
+  TLLOS_COMMIT: 8013a7fab2f421a63a43c7b95c2e645a03689ad0
   TLLC_PATH: tools/TLLC/tllc.tllbc
   # Compiler SHA256 (tllc-v1.0.0-rc1, source commit 364b9c5)
   COMPILER_SHA256: CDE08A572CDD5A1B72837229662CFCB88945121D762BBC0FB583473A1E0C831F
@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
           cd tllos
-          ACTUAL_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          ACTUAL_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
           echo "Expected commit: ${{ env.TLLOS_COMMIT }}"
           echo "Actual commit:   $ACTUAL_COMMIT"
           if [ "$ACTUAL_COMMIT" != "${{ env.TLLOS_COMMIT }}" ]; then
