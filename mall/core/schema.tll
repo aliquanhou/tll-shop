@@ -695,6 +695,38 @@ fn schema_initAll(db) {
         order_count INTEGER DEFAULT 0,
         status TEXT DEFAULT 'active',
         created_at TEXT DEFAULT (datetime('now'))
+
+    // === Points Mall ===
+    db_exec(db, "CREATE TABLE IF NOT EXISTS point_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        image TEXT,
+        points INTEGER NOT NULL DEFAULT 0,
+        stock INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        status INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+    )")
+    db_exec(db, "CREATE INDEX IF NOT EXISTS idx_point_products_status ON point_products(status)")
+
+    db_exec(db, "CREATE TABLE IF NOT EXISTS point_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        product_name TEXT NOT NULL,
+        points INTEGER NOT NULL DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        tracking_number TEXT,
+        address_name TEXT,
+        address_phone TEXT,
+        address_detail TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        shipped_at TEXT,
+        completed_at TEXT
+    )")
+    db_exec(db, "CREATE INDEX IF NOT EXISTS idx_point_orders_user ON point_orders(user_id)")
+
     )")
 
     return {success: true, tables: 49}

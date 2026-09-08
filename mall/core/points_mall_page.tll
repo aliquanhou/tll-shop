@@ -1,0 +1,167 @@
+// TLL Mall - Points Mall Page
+// All logic inline to ensure stability
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn points_mall_registerRoutes(router) {
+    // Points mall list (积分商城列表)
+    router_get(router, "/points-mall", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        let userPoints = 0
+        if (user != null) {
+            let userInfo = db_queryOne(req.db, "SELECT points FROM users WHERE id = ?", [user.id])
+            if (userInfo != null) { userPoints = userInfo.points }
+        }
+
+        let products = db_query(req.db, "SELECT * FROM point_products WHERE status = 1 AND stock > 0 ORDER BY sort_order ASC, id DESC LIMIT 20", [])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(products)) {
+            let p = products[i]
+            let imageHtml = ""
+            if (p.image != null && p.image != "") {
+                imageHtml = "<img src='" + p.image + "' style='width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0' alt='" + p.name + "'>"
+            }
+            if (p.image == null || p.image == "") {
+                imageHtml = "<div style='width:100%;height:160px;background:linear-gradient(135deg,#fa709a,#fee140);border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px'>🎁</div>"
+            }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)'>" +
+                imageHtml +
+                "<div style='padding:12px'>" +
+                "<div style='font-size:14px;font-weight:bold;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>" + p.name + "</div>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>" +
+                "<span style='color:#fa709a;font-size:16px;font-weight:bold'>" + convert.toString(p.points) + " 积分</span>" +
+                "<span style='color:#999;font-size:12px'>库存" + convert.toString(p.stock) + "</span>" +
+                "</div>" +
+                "<form method='POST' action='/points-mall/exchange/" + convert.toString(p.id) + "'>" +
+                "<button type='submit' style='width:100%;padding:8px;background:linear-gradient(135deg,#fa709a,#fee140);color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer'>立即兑换</button>" +
+                "</form>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(products) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px;grid-column:1/-1'>暂无可兑换商品</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#fa709a,#fee140);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<h1 style='margin:0 0 4px 0;font-size:28px'>🎁 积分商城</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>用积分兑换精选好物</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            "<div style='background:#fff;border-radius:8px;padding:16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<div>" +
+            "<div style='font-size:14px;color:#666;margin-bottom:4px'>我的积分</div>" +
+            "<div style='font-size:28px;font-weight:bold;color:#fa709a'>" + convert.toString(userPoints) + " <span style='font-size:14px;color:#999;font-weight:normal'>分</span></div>" +
+            "</div>" +
+            "<a href='/points' style='padding:10px 20px;background:#f5f5f5;color:#333;border-radius:4px;text-decoration:none;font-size:14px'>积分明细</a>" +
+            "</div>" +
+            "<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:16px'>" +
+            listHtml +
+            "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>积分商城</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Exchange product (兑换商品)
+    router_post(router, "/points-mall/exchange/:id", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        if (user == null) {
+            return res_redirect("/login")
+        }
+
+        let productId = convert.toInt(req.params.id)
+        let userId = user.id
+
+        let product = db_queryOne(req.db, "SELECT * FROM point_products WHERE id = ? AND status = 1", [productId])
+        if (product == null) {
+            return res_redirect("/points-mall?error=notfound")
+        }
+
+        if (product.stock <= 0) {
+            return res_redirect("/points-mall?error=outofstock")
+        }
+
+        let userInfo = db_queryOne(req.db, "SELECT points FROM users WHERE id = ?", [userId])
+        if (userInfo == null || userInfo.points < product.points) {
+            return res_redirect("/points-mall?error=insufficient")
+        }
+
+        // Atomic: deduct points and stock
+        db_exec(req.db, "UPDATE users SET points = points - ? WHERE id = ? AND points >= ?", [product.points, userId, product.points])
+        db_exec(req.db, "UPDATE point_products SET stock = stock - 1 WHERE id = ? AND stock > 0", [productId])
+
+        // Create exchange order
+        db_exec(req.db, "INSERT INTO point_orders (user_id, product_id, product_name, points, status, created_at) VALUES (?, ?, ?, ?, 'pending', datetime('now'))", [userId, productId, product.name, product.points])
+
+        // Add points log
+        db_exec(req.db, "INSERT INTO point_logs (user_id, type, points, balance, description, created_at) VALUES (?, 'consume', ?, (SELECT points FROM users WHERE id = ?), '积分商城兑换：' || ?, datetime('now'))", [userId, product.points, userId, product.name])
+
+        return res_redirect("/points-mall?success=exchanged")
+    })
+
+    // My exchange orders (我的兑换记录)
+    router_get(router, "/points-mall/orders", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        if (user == null) {
+            return res_redirect("/login")
+        }
+
+        let userId = user.id
+        let orders = db_query(req.db, "SELECT * FROM point_orders WHERE user_id = ? ORDER BY id DESC LIMIT 20", [userId])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(orders)) {
+            let o = orders[i]
+            let statusText = "待发货"
+            let statusColor = "#faad14"
+            if (o.status == "shipped") { statusText = "已发货"; statusColor = "#1890ff" }
+            if (o.status == "completed") { statusText = "已完成"; statusColor = "#52c41a" }
+            if (o.status == "cancelled") { statusText = "已取消"; statusColor = "#999" }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;padding:16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center'>" +
+                "<div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + o.product_name + "</div>" +
+                "<div style='font-size:13px;color:#666'>兑换时间：" + o.created_at + "</div>" +
+                "</div>" +
+                "<div style='text-align:right'>" +
+                "<div style='color:#fa709a;font-size:18px;font-weight:bold;margin-bottom:4px'>" + convert.toString(o.points) + " 积分</div>" +
+                "<span style='background:" + statusColor + "15;color:" + statusColor + ";padding:4px 12px;border-radius:4px;font-size:13px;font-weight:bold'>" + statusText + "</span>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(orders) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无兑换记录</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#fa709a,#fee140);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<a href='/points-mall' style='color:#fff;opacity:0.9;text-decoration:none;font-size:14px'>&larr; 返回积分商城</a>" +
+            "<h1 style='margin:8px 0 4px 0;font-size:28px'>我的兑换记录</h1>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            listHtml +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>我的兑换记录</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}
