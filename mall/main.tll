@@ -23,6 +23,7 @@ from "./core/logistics_page" import logistics_registerRoutes
 from "./core/aftersale_page_v4" import aftersale_registerRoutes
 from "./core/brand_page" import brand_registerRoutes
 from "./core/points_mall_page" import points_mall_registerRoutes
+from "./core/shein_home_page" import shein_home_registerRoutes
 from "./core/article_page" import article_registerRoutes
 from "./core/member_level_page" import memberlevel_registerRoutes
 from "./core/realname_page" import realname_registerRoutes
@@ -710,6 +711,7 @@ logistics_registerRoutes(mallRouter)
 aftersale_registerRoutes(mallRouter)
 brand_registerRoutes(mallRouter)
 points_mall_registerRoutes(mallRouter)
+shein_home_registerRoutes(mallRouter)
 article_registerRoutes(mallRouter)
 memberlevel_registerRoutes(mallRouter)
 realname_registerRoutes(mallRouter)
