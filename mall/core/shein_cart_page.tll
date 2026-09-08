@@ -1,0 +1,128 @@
+// TLL Mall - SHEIN Style Cart Page
+// All logic inline to ensure stability
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn shein_cart_registerRoutes(router) {
+    // SHEIN style cart page
+    router_get(router, "/shein-cart", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        if (user == null) {
+            return res_redirect("/login")
+        }
+
+        let userId = user.id
+        let cartItems = db_query(req.db, "SELECT ci.*, p.name, p.price, p.image, p.stock FROM cart_items ci LEFT JOIN products p ON ci.product_id = p.id WHERE ci.user_id = ? ORDER BY ci.id DESC", [userId])
+
+        let totalPrice = 0
+        let totalCount = 0
+        let itemsHtml = ""
+        let i = 0
+        while (i < arrays.length(cartItems)) {
+            let item = cartItems[i]
+            let itemTotal = item.price * item.quantity
+            totalPrice = totalPrice + itemTotal
+            totalCount = totalCount + item.quantity
+
+            let imgHtml = ""
+            if (item.image != null && item.image != "") {
+                imgHtml = "<img src='" + item.image + "' class='shein-cart-image' alt='" + item.name + "'>"
+            }
+            if (item.image == null || item.image == "") {
+                imgHtml = "<div class='shein-cart-image' style='display:flex;align-items:center;justify-content:center;font-size:32px;background:linear-gradient(135deg,#f5f7fa,#c3cfe2)'>📦</div>"
+            }
+
+            itemsHtml = itemsHtml +
+                "<div class='shein-cart-item'>" +
+                "<div style='display:flex;align-items:center;padding-right:8px'>" +
+                "<input type='checkbox' checked style='width:18px;height:18px;accent-color:#ff4400'>" +
+                "</div>" +
+                imgHtml +
+                "<div class='shein-cart-info'>" +
+                "<div class='shein-cart-title'>" + item.name + "</div>" +
+                "<div style='font-size:11px;color:#999;margin-bottom:6px'>规格：默认</div>" +
+                "<div class='shein-cart-price-row'>" +
+                "<span class='shein-cart-price'>¥" + convert.toString(item.price) + "</span>" +
+                "<div class='shein-cart-qty'>" +
+                "<form method='POST' action='/cart/decrease/" + convert.toString(item.id) + "' style='display:inline'>" +
+                "<button type='submit' class='shein-cart-qty-btn'>−</button>" +
+                "</form>" +
+                "<span class='shein-cart-qty-num'>" + convert.toString(item.quantity) + "</span>" +
+                "<form method='POST' action='/cart/increase/" + convert.toString(item.id) + "' style='display:inline'>" +
+                "<button type='submit' class='shein-cart-qty-btn'>+</button>" +
+                "</form>" +
+                "</div>" +
+                "</div>" +
+                "</div>" +
+                "<form method='POST' action='/cart/remove/" + convert.toString(item.id) + "' style='display:flex;align-items:flex-start;padding-top:4px'>" +
+                "<button type='submit' style='background:none;border:none;color:#ccc;font-size:18px;cursor:pointer;padding:4px'>×</button>" +
+                "</form>" +
+                "</div>"
+            i = i + 1
+        }
+
+        let emptyHtml = ""
+        if (arrays.length(cartItems) == 0) {
+            emptyHtml =
+                "<div class='shein-empty'>" +
+                "<div class='shein-empty-icon'>🛒</div>" +
+                "<div class='shein-empty-text'>购物车还是空的</div>" +
+                "<a href='/shein-home' style='display:inline-block;margin-top:20px;padding:10px 32px;background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;border-radius:20px;text-decoration:none;font-size:14px;font-weight:600'>去逛逛</a>" +
+                "</div>"
+        }
+
+        let body =
+            // Header
+            "<div class='shein-page-title'>" +
+            "<span style='flex:1'>购物车 (" + convert.toString(totalCount) + ")</span>" +
+            "<a href='/shein-home' style='font-size:14px;color:#666;text-decoration:none;font-weight:normal'>管理</a>" +
+            "</div>" +
+
+            // Cart Items
+            (arrays.length(cartItems) > 0 ? itemsHtml : emptyHtml) +
+
+            // Bottom Bar
+            (arrays.length(cartItems) > 0 ?
+                "<div class='shein-cart-bottom'>" +
+                "<div style='display:flex;align-items:center;gap:8px'>" +
+                "<input type='checkbox' checked style='width:18px;height:18px;accent-color:#ff4400'>" +
+                "<span style='font-size:13px'>全选</span>" +
+                "</div>" +
+                "<div style='display:flex;align-items:center;gap:12px'>" +
+                "<div class='shein-cart-total'>" +
+                "合计：<span class='shein-cart-total-price'>¥" + convert.toString(totalPrice) + "</span>" +
+                "</div>" +
+                "<form method='POST' action='/order/checkout' style='display:inline'>" +
+                "<button type='submit' class='shein-cart-checkout-btn'>结算(" + convert.toString(totalCount) + ")</button>" +
+                "</form>" +
+                "</div>" +
+                "</div>"
+                : "") +
+
+            // Bottom Tab Bar
+            "<div class='shein-tabbar'>" +
+            "<a href='/shein-home' class='shein-tab-item'>" +
+            "<span class='shein-tab-icon'>🏠</span>" +
+            "<span class='shein-tab-label'>首页</span>" +
+            "</a>" +
+            "<a href='/categories' class='shein-tab-item'>" +
+            "<span class='shein-tab-icon'>📋</span>" +
+            "<span class='shein-tab-label'>分类</span>" +
+            "</a>" +
+            "<a href='/shein-cart' class='shein-tab-item active' style='position:relative'>" +
+            "<span class='shein-tab-icon'>🛒</span>" +
+            "<span class='shein-tab-label'>购物车</span>" +
+            (totalCount > 0 ? "<span class='shein-tab-cart-badge'>" + convert.toString(totalCount) + "</span>" : "") +
+            "</a>" +
+            "<a href='/user-center' class='shein-tab-item'>" +
+            "<span class='shein-tab-icon'>👤</span>" +
+            "<span class='shein-tab-label'>我的</span>" +
+            "</a>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>购物车 - SHEIN Style</title><link rel='stylesheet' href='/static/css/shein-style.css'></head><body style='padding-bottom:120px'>" + body + "</body></html>")
+    })
+}
