@@ -1,0 +1,469 @@
+// TLL Mall - Group Buy (拼团) Page
+// All logic inline to avoid helper function bug
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery, req_getBody
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn groupbuy_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn groupbuy_registerRoutes(router) {
+    // Group buy activity list
+    router_get(router, "/groupbuy", fn(req) {
+        let activities = db_query(req.db, "SELECT * FROM group_buy_activities WHERE status = 'active' ORDER BY sort_order ASC, id DESC LIMIT 20", [])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(activities)) {
+            let a = activities[i]
+            let products = db_query(req.db, "SELECT gp.*, p.name as product_name FROM group_buy_products gp LEFT JOIN products p ON gp.product_id = p.id WHERE gp.activity_id = ? AND gp.status = 'active' ORDER BY gp.sort_order ASC, gp.id DESC LIMIT 4", [a.id])
+
+            let productsHtml = ""
+            let j = 0
+            while (j < arrays.length(products)) {
+                let p = products[j]
+                let productName = "商品"
+                if (p.product_name != null) { productName = p.product_name }
+                productsHtml = productsHtml +
+                    "<a href='/groupbuy/product/" + convert.toString(p.id) + "' style='text-decoration:none;color:inherit;display:block;background:#fff;border-radius:8px;overflow:hidden'>" +
+                    "<div style='height:120px;background:linear-gradient(135deg,#52c41a,#389e0d);display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px'>👥</div>" +
+                    "<div style='padding:8px'>" +
+                    "<div style='font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:4px'>" + productName + "</div>" +
+                    "<div style='display:flex;align-items:baseline;gap:4px;margin-bottom:4px'>" +
+                    "<span style='color:#52c41a;font-size:16px;font-weight:bold'>¥" + convert.toString(p.group_price) + "</span>" +
+                    "<span style='color:#999;font-size:12px;text-decoration:line-through'>¥" + convert.toString(p.original_price) + "</span>" +
+                    "</div>" +
+                    "<div style='font-size:11px;color:#52c41a;background:#f6ffed;padding:2px 4px;border-radius:2px;display:inline-block'>" + convert.toString(p.group_size) + "人团</div>" +
+                    "</div>" +
+                    "</a>"
+                j = j + 1
+            }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;margin-bottom:16px;border-radius:8px;overflow:hidden'>" +
+                "<div style='background:linear-gradient(90deg,#52c41a,#389e0d);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center'>" +
+                "<div>" +
+                "<div style='font-size:18px;font-weight:bold'>" + a.name + "</div>" +
+                "<div style='font-size:12px;opacity:0.9'>" + a.start_at + " - " + a.end_at + "</div>" +
+                "</div>" +
+                "<a href='/groupbuy/activity/" + convert.toString(a.id) + "' style='color:#fff;text-decoration:none;font-size:14px;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:4px'>更多</a>" +
+                "</div>" +
+                "<div style='padding:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px'>" + productsHtml + "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(activities) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无拼团活动，敬请期待</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:1200px;margin:0 auto'>" +
+            "<h1 style='margin:0 0 4px 0;font-size:28px'>👥 拼团特惠</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>多人拼团，价格更低，邀请好友一起买</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:1200px;margin:0 auto;padding:0 16px'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>拼团特惠</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Group buy activity detail
+    router_get(router, "/groupbuy/activity/:id", fn(req) {
+        let activityId = convert.toInt(req.params.id)
+        let activity = db_queryOne(req.db, "SELECT * FROM group_buy_activities WHERE id = ? AND status = 'active'", [activityId])
+        if (activity == null) {
+            return res_redirect("/groupbuy")
+        }
+
+        let products = db_query(req.db, "SELECT gp.*, p.name as product_name FROM group_buy_products gp LEFT JOIN products p ON gp.product_id = p.id WHERE gp.activity_id = ? AND gp.status = 'active' ORDER BY gp.sort_order ASC, gp.id DESC", [activityId])
+
+        let productsHtml = ""
+        let i = 0
+        while (i < arrays.length(products)) {
+            let p = products[i]
+            let productName = "商品"
+            if (p.product_name != null) { productName = p.product_name }
+            let stockLeft = p.stock - p.sold_count
+            if (stockLeft < 0) { stockLeft = 0 }
+
+            // Count active teams for this product
+            let teams = db_query(req.db, "SELECT COUNT(*) as cnt FROM group_buy_teams WHERE group_product_id = ? AND status = 'pending'", [p.id])
+            let activeTeams = 0
+            if (arrays.length(teams) > 0 && teams[0].cnt != null) {
+                activeTeams = teams[0].cnt
+            }
+
+            productsHtml = productsHtml +
+                "<div style='background:#fff;border-radius:8px;overflow:hidden;display:flex'>" +
+                "<div style='width:160px;height:160px;background:linear-gradient(135deg,#52c41a,#389e0d);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;flex-shrink:0'>👥</div>" +
+                "<div style='flex:1;padding:16px;display:flex;flex-direction:column;justify-content:space-between'>" +
+                "<div>" +
+                "<div style='font-size:18px;font-weight:bold;margin-bottom:8px'>" + productName + "</div>" +
+                "<div style='display:flex;align-items:baseline;gap:8px;margin-bottom:8px'>" +
+                "<span style='color:#52c41a;font-size:28px;font-weight:bold'>¥" + convert.toString(p.group_price) + "</span>" +
+                "<span style='color:#999;font-size:14px;text-decoration:line-through'>¥" + convert.toString(p.original_price) + "</span>" +
+                "<span style='background:#52c41a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px'>" + convert.toString(p.group_size) + "人团</span>" +
+                "</div>" +
+                "<div style='font-size:13px;color:#666'>剩余" + convert.toString(stockLeft) + "件 · " + convert.toString(activeTeams) + "个团进行中</div>" +
+                "</div>" +
+                "<div style='display:flex;justify-content:flex-end;gap:8px'>" +
+                "<a href='/groupbuy/product/" + convert.toString(p.id) + "' style='background:#52c41a;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:bold'>去开团/参团</a>" +
+                "</div>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(products) == 0) {
+            productsHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff;border-radius:8px'>该活动暂无商品</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:1000px;margin:0 auto'>" +
+            "<a href='/groupbuy' style='color:#fff;text-decoration:none;font-size:14px;opacity:0.9'>← 返回拼团列表</a>" +
+            "<h1 style='margin:8px 0 4px 0;font-size:24px'>" + activity.name + "</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>" + activity.description + "</p>" +
+            "<p style='margin:8px 0 0 0;font-size:13px;opacity:0.8'>活动时间：" + activity.start_at + " - " + activity.end_at + "</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:1000px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column;gap:12px'>" + productsHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>" + activity.name + "</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Group buy product detail
+    router_get(router, "/groupbuy/product/:id", fn(req) {
+        let gpId = convert.toInt(req.params.id)
+        let gp = db_queryOne(req.db, "SELECT gp.*, p.name as product_name, p.description as product_desc, a.name as activity_name, a.start_at, a.end_at FROM group_buy_products gp LEFT JOIN products p ON gp.product_id = p.id LEFT JOIN group_buy_activities a ON gp.activity_id = a.id WHERE gp.id = ? AND gp.status = 'active'", [gpId])
+        if (gp == null) {
+            return res_redirect("/groupbuy")
+        }
+
+        let productName = "商品"
+        if (gp.product_name != null) { productName = gp.product_name }
+        let stockLeft = gp.stock - gp.sold_count
+        if (stockLeft < 0) { stockLeft = 0 }
+
+        // Get active teams for this product
+        let teams = db_query(req.db, "SELECT t.*, u.username as leader_name FROM group_buy_teams t LEFT JOIN users u ON t.leader_id = u.id WHERE t.group_product_id = ? AND t.status = 'pending' ORDER BY t.created_at DESC LIMIT 10", [gpId])
+
+        let teamsHtml = ""
+        let i = 0
+        while (i < arrays.length(teams)) {
+            let t = teams[i]
+            let leaderName = "用户"
+            if (t.leader_name != null) { leaderName = t.leader_name }
+            let progressPercent = (t.current_size * 100) / t.target_size
+
+            teamsHtml = teamsHtml +
+                "<div style='background:#f9f9f9;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center'>" +
+                "<div style='flex:1'>" +
+                "<div style='font-size:14px;font-weight:bold;margin-bottom:4px'>" + leaderName + " 的团</div>" +
+                "<div style='height:4px;background:#e0e0e0;border-radius:2px;overflow:hidden;margin-bottom:4px'>" +
+                "<div style='height:100%;background:#52c41a;width:" + convert.toString(progressPercent) + "%'></div>" +
+                "</div>" +
+                "<div style='font-size:12px;color:#666'>已有" + convert.toString(t.current_size) + "人，还差" + convert.toString(t.target_size - t.current_size) + "人</div>" +
+                "</div>" +
+                "<a href='/groupbuy/join/" + convert.toString(t.id) + "' style='background:#52c41a;color:#fff;padding:8px 16px;border-radius:4px;text-decoration:none;font-size:13px;font-weight:bold;margin-left:12px'>去参团</a>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(teams) == 0) {
+            teamsHtml = "<div style='padding:20px;text-align:center;color:#999;font-size:13px'>暂无进行中的团，快来开第一个团吧</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;padding:16px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<a href='/groupbuy/activity/" + convert.toString(gp.activity_id) + "' style='color:#fff;text-decoration:none;font-size:14px;opacity:0.9'>← 返回活动页</a>" +
+            "<h1 style='margin:8px 0 0 0;font-size:20px'>" + gp.activity_name + "</h1>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            "<div style='background:#fff;border-radius:8px;overflow:hidden;margin-bottom:16px'>" +
+            "<div style='height:300px;background:linear-gradient(135deg,#52c41a,#389e0d);display:flex;align-items:center;justify-content:center;color:#fff;font-size:80px'>👥</div>" +
+            "<div style='padding:20px'>" +
+            "<h2 style='margin:0 0 12px 0;font-size:22px'>" + productName + "</h2>" +
+            "<div style='display:flex;align-items:baseline;gap:12px;margin-bottom:16px'>" +
+            "<span style='color:#52c41a;font-size:36px;font-weight:bold'>¥" + convert.toString(gp.group_price) + "</span>" +
+            "<span style='color:#999;font-size:16px;text-decoration:line-through'>¥" + convert.toString(gp.original_price) + "</span>" +
+            "<span style='background:#52c41a;color:#fff;padding:4px 10px;border-radius:4px;font-size:13px'>" + convert.toString(gp.group_size) + "人拼团</span>" +
+            "</div>" +
+            "<div style='font-size:14px;color:#666;margin-bottom:20px'>剩余" + convert.toString(stockLeft) + "件 · 每人限购" + convert.toString(gp.limit_per_user) + "件</div>" +
+            "<div style='display:flex;gap:12px'>" +
+            "<form method='POST' action='/groupbuy/start/" + convert.toString(gp.id) + "' style='flex:1'>" +
+            "<button type='submit' style='width:100%;padding:14px;background:#ff4400;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer'>🚀 我要开团</button>" +
+            "</form>" +
+            "</div>" +
+            "</div>" +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px;margin-bottom:16px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>🔥 正在进行的团</h3>" +
+            teamsHtml +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px;margin-bottom:16px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>商品详情</h3>" +
+            "<div style='color:#666;line-height:1.8'>" + gp.product_desc + "</div>" +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>拼团说明</h3>" +
+            "<div style='color:#666;line-height:1.8;font-size:14px'>" +
+            "<div>• 活动时间：" + gp.start_at + " - " + gp.end_at + "</div>" +
+            "<div>• 开团后24小时内凑满" + convert.toString(gp.group_size) + "人即为拼团成功</div>" +
+            "<div>• 拼团失败将自动退款</div>" +
+            "<div>• 每人限购" + convert.toString(gp.limit_per_user) + "件</div>" +
+            "<div>• 拼团商品不支持7天无理由退货（质量问题除外）</div>" +
+            "</div>" +
+            "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>" + productName + " - 拼团特惠</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Start a new group (开团)
+    router_post(router, "/groupbuy/start/:id", fn(req) {
+        let authResult = groupbuy_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let gpId = convert.toInt(req.params.id)
+        let userId = req.currentUser.id
+
+        let gp = db_queryOne(req.db, "SELECT * FROM group_buy_products WHERE id = ? AND status = 'active'", [gpId])
+        if (gp == null) {
+            return res_redirect("/groupbuy")
+        }
+
+        // Check stock
+        let stockLeft = gp.stock - gp.sold_count
+        if (stockLeft <= 0) {
+            return res_redirect("/groupbuy/product/" + convert.toString(gpId) + "?error=soldout")
+        }
+
+        // Check if user already has an active team for this product
+        let existingTeam = db_queryOne(req.db, "SELECT t.* FROM group_buy_teams t WHERE t.group_product_id = ? AND t.leader_id = ? AND t.status = 'pending'", [gpId, userId])
+        if (existingTeam != null) {
+            return res_redirect("/groupbuy/team/" + convert.toString(existingTeam.id))
+        }
+
+        // Atomic stock decrement
+        db_exec(req.db, "UPDATE group_buy_products SET sold_count = sold_count + 1 WHERE id = ? AND sold_count < stock", [gpId])
+
+        // Create team
+        let orderNo = "GB" + convert.toString(time.now()) + convert.toString(userId)
+        let totalPrice = gp.group_price * 1
+        db_exec(req.db, "INSERT INTO group_buy_teams (activity_id, product_id, group_product_id, leader_id, current_size, target_size, status, order_no, total_price, created_at, expired_at) VALUES (?, ?, ?, ?, 1, ?, 'pending', ?, ?, datetime('now'), datetime('now', '+1 day'))", [gp.activity_id, gp.product_id, gpId, userId, gp.group_size, orderNo, totalPrice])
+
+        // Get the team id
+        let team = db_queryOne(req.db, "SELECT id FROM group_buy_teams WHERE order_no = ?", [orderNo])
+        let teamId = 0
+        if (team != null) { teamId = team.id }
+
+        // Add leader as member
+        db_exec(req.db, "INSERT INTO group_buy_members (team_id, user_id, is_leader, order_no, quantity, total_price, status, created_at) VALUES (?, ?, 1, ?, 1, ?, 'pending', datetime('now'))", [teamId, userId, orderNo, totalPrice])
+
+        return res_redirect("/groupbuy/team/" + convert.toString(teamId))
+    })
+
+    // Join an existing team (参团)
+    router_post(router, "/groupbuy/join/:teamId", fn(req) {
+        let authResult = groupbuy_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let teamId = convert.toInt(req.params.teamId)
+        let userId = req.currentUser.id
+
+        let team = db_queryOne(req.db, "SELECT * FROM group_buy_teams WHERE id = ? AND status = 'pending'", [teamId])
+        if (team == null) {
+            return res_redirect("/groupbuy")
+        }
+
+        // Check if user already in this team
+        let existingMember = db_queryOne(req.db, "SELECT * FROM group_buy_members WHERE team_id = ? AND user_id = ?", [teamId, userId])
+        if (existingMember != null) {
+            return res_redirect("/groupbuy/team/" + convert.toString(teamId))
+        }
+
+        // Check if team is full
+        if (team.current_size >= team.target_size) {
+            return res_redirect("/groupbuy/team/" + convert.toString(teamId) + "?error=full")
+        }
+
+        // Get group product
+        let gp = db_queryOne(req.db, "SELECT * FROM group_buy_products WHERE id = ?", [team.group_product_id])
+        if (gp == null) {
+            return res_redirect("/groupbuy")
+        }
+
+        // Atomic stock decrement
+        db_exec(req.db, "UPDATE group_buy_products SET sold_count = sold_count + 1 WHERE id = ? AND sold_count < stock", [gp.id])
+
+        // Add member
+        let orderNo = "GB" + convert.toString(time.now()) + convert.toString(userId)
+        let totalPrice = gp.group_price * 1
+        db_exec(req.db, "INSERT INTO group_buy_members (team_id, user_id, is_leader, order_no, quantity, total_price, status, created_at) VALUES (?, ?, 0, ?, 1, ?, 'pending', datetime('now'))", [teamId, userId, orderNo, totalPrice])
+
+        // Increment team size
+        db_exec(req.db, "UPDATE group_buy_teams SET current_size = current_size + 1 WHERE id = ?", [teamId])
+
+        // Check if team is now complete
+        let updatedTeam = db_queryOne(req.db, "SELECT * FROM group_buy_teams WHERE id = ?", [teamId])
+        if (updatedTeam != null && updatedTeam.current_size >= updatedTeam.target_size) {
+            db_exec(req.db, "UPDATE group_buy_teams SET status = 'success', success_at = datetime('now') WHERE id = ?", [teamId])
+            db_exec(req.db, "UPDATE group_buy_members SET status = 'success' WHERE team_id = ?", [teamId])
+        }
+
+        return res_redirect("/groupbuy/team/" + convert.toString(teamId))
+    })
+
+    // Team detail page
+    router_get(router, "/groupbuy/team/:id", fn(req) {
+        let authResult = groupbuy_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let teamId = convert.toInt(req.params.id)
+        let team = db_queryOne(req.db, "SELECT t.*, p.name as product_name, gp.group_price, gp.group_size FROM group_buy_teams t LEFT JOIN products p ON t.product_id = p.id LEFT JOIN group_buy_products gp ON t.group_product_id = gp.id WHERE t.id = ?", [teamId])
+        if (team == null) {
+            return res_redirect("/groupbuy")
+        }
+
+        let productName = "商品"
+        if (team.product_name != null) { productName = team.product_name }
+
+        let members = db_query(req.db, "SELECT m.*, u.username, u.avatar FROM group_buy_members m LEFT JOIN users u ON m.user_id = u.id WHERE m.team_id = ? ORDER BY m.created_at ASC", [teamId])
+
+        let membersHtml = ""
+        let i = 0
+        while (i < arrays.length(members)) {
+            let m = members[i]
+            let username = "用户"
+            if (m.username != null) { username = m.username }
+            let leaderBadge = ""
+            if (m.is_leader == 1) { leaderBadge = "<span style='background:#ff4400;color:#fff;padding:2px 6px;border-radius:2px;font-size:11px;margin-left:4px'>团长</span>" }
+
+            membersHtml = membersHtml +
+                "<div style='display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0'>" +
+                "<div style='width:36px;height:36px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;margin-right:12px'>" + arrays.slice(username, 0, 1) + "</div>" +
+                "<div style='flex:1'>" + username + leaderBadge + "</div>" +
+                "<div style='color:#52c41a;font-size:13px'>已参与</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        let progressPercent = (team.current_size * 100) / team.target_size
+        let remaining = team.target_size - team.current_size
+        if (remaining < 0) { remaining = 0 }
+
+        let statusText = "拼团中"
+        let statusColor = "#52c41a"
+        if (team.status == "success") { statusText = "拼团成功"; statusColor = "#52c41a" }
+        if (team.status == "failed") { statusText = "拼团失败"; statusColor = "#ff4d4f" }
+        if (team.status == "cancelled") { statusText = "已取消"; statusColor = "#999" }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:600px;margin:0 auto;text-align:center'>" +
+            "<div style='font-size:48px;margin-bottom:8px'>👥</div>" +
+            "<h1 style='margin:0 0 8px 0;font-size:24px'>" + statusText + "</h1>" +
+            "<div style='font-size:14px;opacity:0.9'>" + productName + "</div>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:600px;margin:0 auto;padding:0 16px'>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;text-align:center'>" +
+            "<div style='font-size:32px;font-weight:bold;color:#52c41a;margin-bottom:8px'>" + convert.toString(team.current_size) + "/" + convert.toString(team.target_size) + "</div>" +
+            "<div style='height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-bottom:8px'>" +
+            "<div style='height:100%;background:#52c41a;width:" + convert.toString(progressPercent) + "%'></div>" +
+            "</div>" +
+            "<div style='font-size:14px;color:#666'>还差" + convert.toString(remaining) + "人拼团成功</div>" +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px;margin-bottom:16px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>参团成员</h3>" +
+            membersHtml +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px;margin-bottom:16px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>订单信息</h3>" +
+            "<div style='font-size:14px;color:#666;line-height:2'>" +
+            "<div>订单号：" + team.order_no + "</div>" +
+            "<div>商品：" + productName + "</div>" +
+            "<div>拼团价：¥" + convert.toString(team.group_price) + "</div>" +
+            "<div>下单时间：" + team.created_at + "</div>" +
+            "</div>" +
+            "</div>" +
+            "<div style='display:flex;gap:12px;margin-bottom:16px'>" +
+            "<a href='/groupbuy/product/" + convert.toString(team.group_product_id) + "' style='flex:1;text-align:center;padding:12px;background:#f0f0f0;color:#333;border-radius:8px;text-decoration:none;font-size:14px'>查看商品</a>" +
+            "<a href='/groupbuy/orders' style='flex:1;text-align:center;padding:12px;background:#52c41a;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold'>我的拼团</a>" +
+            "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>拼团详情</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // My group buy orders
+    router_get(router, "/groupbuy/orders", fn(req) {
+        let authResult = groupbuy_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userId = req.currentUser.id
+        let teams = db_query(req.db, "SELECT t.*, p.name as product_name, gp.group_price FROM group_buy_teams t LEFT JOIN group_buy_members m ON t.id = m.team_id LEFT JOIN products p ON t.product_id = p.id LEFT JOIN group_buy_products gp ON t.group_product_id = gp.id WHERE m.user_id = ? GROUP BY t.id ORDER BY t.id DESC LIMIT 50", [userId])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(teams)) {
+            let t = teams[i]
+            let productName = "商品"
+            if (t.product_name != null) { productName = t.product_name }
+
+            let statusText = "拼团中"
+            let statusColor = "#52c41a"
+            if (t.status == "success") { statusText = "拼团成功"; statusColor = "#52c41a" }
+            if (t.status == "failed") { statusText = "拼团失败"; statusColor = "#ff4d4f" }
+            if (t.status == "cancelled") { statusText = "已取消"; statusColor = "#999" }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;padding:16px;margin-bottom:12px'>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #f0f0f0'>" +
+                "<span style='color:#999;font-size:13px'>团号：" + t.order_no + "</span>" +
+                "<span style='color:" + statusColor + ";font-weight:bold'>" + statusText + "</span>" +
+                "</div>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center'>" +
+                "<div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + productName + "</div>" +
+                "<div style='color:#999;font-size:13px'>" + convert.toString(t.current_size) + "/" + convert.toString(t.target_size) + "人</div>" +
+                "</div>" +
+                "<div style='text-align:right'>" +
+                "<div style='color:#52c41a;font-size:20px;font-weight:bold'>¥" + convert.toString(t.group_price) + "</div>" +
+                "</div>" +
+                "</div>" +
+                "<div style='margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center'>" +
+                "<span style='color:#999;font-size:12px'>开团时间：" + t.created_at + "</span>" +
+                "<a href='/groupbuy/team/" + convert.toString(t.id) + "' style='color:#52c41a;text-decoration:none;font-size:14px'>查看详情</a>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(teams) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无拼团订单，快去拼团吧</div>"
+        }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<h1 style='margin:0;font-size:18px'>我的拼团</h1>" +
+            "<a href='/groupbuy' style='color:#52c41a;text-decoration:none;font-size:14px'>继续拼团</a>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>我的拼团</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}

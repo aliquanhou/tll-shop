@@ -1,0 +1,319 @@
+// TLL Mall - Seckill (Flash Sale) Page
+// All logic inline to avoid helper function bug
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery, req_getBody
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn seckill_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn seckill_registerRoutes(router) {
+    // Seckill activity list
+    router_get(router, "/seckill", fn(req) {
+        let activities = db_query(req.db, "SELECT * FROM seckill_activities WHERE status = 'active' ORDER BY sort_order ASC, id DESC LIMIT 20", [])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(activities)) {
+            let a = activities[i]
+            let products = db_query(req.db, "SELECT sp.*, p.name as product_name, p.image as product_image FROM seckill_products sp LEFT JOIN products p ON sp.product_id = p.id WHERE sp.activity_id = ? AND sp.status = 'active' ORDER BY sp.sort_order ASC, sp.id DESC LIMIT 4", [a.id])
+
+            let productsHtml = ""
+            let j = 0
+            while (j < arrays.length(products)) {
+                let p = products[j]
+                let productName = "商品"
+                if (p.product_name != null) { productName = p.product_name }
+                let progressPercent = 0
+                if (p.stock > 0) {
+                    progressPercent = (p.sold_count * 100) / p.stock
+                }
+                productsHtml = productsHtml +
+                    "<a href='/seckill/product/" + convert.toString(p.id) + "' style='text-decoration:none;color:inherit;display:block;background:#fff;border-radius:8px;overflow:hidden'>" +
+                    "<div style='height:120px;background:linear-gradient(135deg,#ff6b6b,#ee5a24);display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px'>🔥</div>" +
+                    "<div style='padding:8px'>" +
+                    "<div style='font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:4px'>" + productName + "</div>" +
+                    "<div style='display:flex;align-items:baseline;gap:4px;margin-bottom:4px'>" +
+                    "<span style='color:#ff4400;font-size:16px;font-weight:bold'>¥" + convert.toString(p.seckill_price) + "</span>" +
+                    "<span style='color:#999;font-size:12px;text-decoration:line-through'>¥" + convert.toString(p.original_price) + "</span>" +
+                    "</div>" +
+                    "<div style='height:4px;background:#f0f0f0;border-radius:2px;overflow:hidden'>" +
+                    "<div style='height:100%;background:#ff4400;width:" + convert.toString(progressPercent) + "%'></div>" +
+                    "</div>" +
+                    "<div style='font-size:11px;color:#999;margin-top:2px'>已抢" + convert.toString(p.sold_count) + "件</div>" +
+                    "</div>" +
+                    "</a>"
+                j = j + 1
+            }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;margin-bottom:16px;border-radius:8px;overflow:hidden'>" +
+                "<div style='background:linear-gradient(90deg,#ff4400,#ff6b6b);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center'>" +
+                "<div>" +
+                "<div style='font-size:18px;font-weight:bold'>" + a.name + "</div>" +
+                "<div style='font-size:12px;opacity:0.9'>" + a.start_at + " - " + a.end_at + "</div>" +
+                "</div>" +
+                "<a href='/seckill/activity/" + convert.toString(a.id) + "' style='color:#fff;text-decoration:none;font-size:14px;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:4px'>更多</a>" +
+                "</div>" +
+                "<div style='padding:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px'>" + productsHtml + "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(activities) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无秒杀活动，敬请期待</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:1200px;margin:0 auto'>" +
+            "<h1 style='margin:0 0 4px 0;font-size:28px'>⚡ 限时秒杀</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>超值好物，限时抢购，先到先得</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:1200px;margin:0 auto;padding:0 16px'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>限时秒杀</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Seckill activity detail
+    router_get(router, "/seckill/activity/:id", fn(req) {
+        let activityId = convert.toInt(req.params.id)
+        let activity = db_queryOne(req.db, "SELECT * FROM seckill_activities WHERE id = ? AND status = 'active'", [activityId])
+        if (activity == null) {
+            return res_redirect("/seckill")
+        }
+
+        let products = db_query(req.db, "SELECT sp.*, p.name as product_name, p.image as product_image, p.description as product_desc FROM seckill_products sp LEFT JOIN products p ON sp.product_id = p.id WHERE sp.activity_id = ? AND sp.status = 'active' ORDER BY sp.sort_order ASC, sp.id DESC", [activityId])
+
+        let productsHtml = ""
+        let i = 0
+        while (i < arrays.length(products)) {
+            let p = products[i]
+            let productName = "商品"
+            if (p.product_name != null) { productName = p.product_name }
+            let progressPercent = 0
+            if (p.stock > 0) {
+                progressPercent = (p.sold_count * 100) / p.stock
+            }
+            let stockLeft = p.stock - p.sold_count
+            if (stockLeft < 0) { stockLeft = 0 }
+
+            productsHtml = productsHtml +
+                "<div style='background:#fff;border-radius:8px;overflow:hidden;display:flex'>" +
+                "<div style='width:160px;height:160px;background:linear-gradient(135deg,#ff6b6b,#ee5a24);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;flex-shrink:0'>🔥</div>" +
+                "<div style='flex:1;padding:16px;display:flex;flex-direction:column;justify-content:space-between'>" +
+                "<div>" +
+                "<div style='font-size:18px;font-weight:bold;margin-bottom:8px'>" + productName + "</div>" +
+                "<div style='display:flex;align-items:baseline;gap:8px;margin-bottom:8px'>" +
+                "<span style='color:#ff4400;font-size:28px;font-weight:bold'>¥" + convert.toString(p.seckill_price) + "</span>" +
+                "<span style='color:#999;font-size:14px;text-decoration:line-through'>¥" + convert.toString(p.original_price) + "</span>" +
+                "</div>" +
+                "<div style='height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden;margin-bottom:4px'>" +
+                "<div style='height:100%;background:#ff4400;width:" + convert.toString(progressPercent) + "%'></div>" +
+                "</div>" +
+                "<div style='font-size:12px;color:#999'>已抢" + convert.toString(p.sold_count) + "件，剩余" + convert.toString(stockLeft) + "件</div>" +
+                "</div>" +
+                "<div style='display:flex;justify-content:flex-end'>" +
+                "<a href='/seckill/product/" + convert.toString(p.id) + "' style='background:#ff4400;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:bold'>立即抢购</a>" +
+                "</div>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(products) == 0) {
+            productsHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff;border-radius:8px'>该活动暂无商品</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:1000px;margin:0 auto'>" +
+            "<a href='/seckill' style='color:#fff;text-decoration:none;font-size:14px;opacity:0.9'>← 返回秒杀列表</a>" +
+            "<h1 style='margin:8px 0 4px 0;font-size:24px'>" + activity.name + "</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>" + activity.description + "</p>" +
+            "<p style='margin:8px 0 0 0;font-size:13px;opacity:0.8'>活动时间：" + activity.start_at + " - " + activity.end_at + "</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:1000px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column;gap:12px'>" + productsHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>" + activity.name + "</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Seckill product detail
+    router_get(router, "/seckill/product/:id", fn(req) {
+        let spId = convert.toInt(req.params.id)
+        let sp = db_queryOne(req.db, "SELECT sp.*, p.name as product_name, p.image as product_image, p.description as product_desc, a.name as activity_name, a.start_at, a.end_at FROM seckill_products sp LEFT JOIN products p ON sp.product_id = p.id LEFT JOIN seckill_activities a ON sp.activity_id = a.id WHERE sp.id = ? AND sp.status = 'active'", [spId])
+        if (sp == null) {
+            return res_redirect("/seckill")
+        }
+
+        let productName = "商品"
+        if (sp.product_name != null) { productName = sp.product_name }
+        let progressPercent = 0
+        if (sp.stock > 0) {
+            progressPercent = (sp.sold_count * 100) / sp.stock
+        }
+        let stockLeft = sp.stock - sp.sold_count
+        if (stockLeft < 0) { stockLeft = 0 }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:16px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<a href='/seckill/activity/" + convert.toString(sp.activity_id) + "' style='color:#fff;text-decoration:none;font-size:14px;opacity:0.9'>← 返回活动页</a>" +
+            "<h1 style='margin:8px 0 0 0;font-size:20px'>" + sp.activity_name + "</h1>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            "<div style='background:#fff;border-radius:8px;overflow:hidden;margin-bottom:16px'>" +
+            "<div style='height:300px;background:linear-gradient(135deg,#ff6b6b,#ee5a24);display:flex;align-items:center;justify-content:center;color:#fff;font-size:80px'>🔥</div>" +
+            "<div style='padding:20px'>" +
+            "<h2 style='margin:0 0 12px 0;font-size:22px'>" + productName + "</h2>" +
+            "<div style='display:flex;align-items:baseline;gap:12px;margin-bottom:16px'>" +
+            "<span style='color:#ff4400;font-size:36px;font-weight:bold'>¥" + convert.toString(sp.seckill_price) + "</span>" +
+            "<span style='color:#999;font-size:16px;text-decoration:line-through'>¥" + convert.toString(sp.original_price) + "</span>" +
+            "<span style='background:#ff4400;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px'>限时特惠</span>" +
+            "</div>" +
+            "<div style='height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-bottom:8px'>" +
+            "<div style='height:100%;background:#ff4400;width:" + convert.toString(progressPercent) + "%'></div>" +
+            "</div>" +
+            "<div style='display:flex;justify-content:space-between;font-size:14px;color:#666;margin-bottom:20px'>" +
+            "<span>已抢 " + convert.toString(sp.sold_count) + " 件</span>" +
+            "<span>剩余 " + convert.toString(stockLeft) + " 件</span>" +
+            "<span>每人限购 " + convert.toString(sp.limit_per_user) + " 件</span>" +
+            "</div>" +
+            "<form method='POST' action='/seckill/buy/" + convert.toString(sp.id) + "'>" +
+            "<button type='submit' style='width:100%;padding:16px;background:#ff4400;color:#fff;border:none;border-radius:8px;font-size:18px;font-weight:bold;cursor:pointer'>⚡ 立即抢购</button>" +
+            "</form>" +
+            "</div>" +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px;margin-bottom:16px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>商品详情</h3>" +
+            "<div style='color:#666;line-height:1.8'>" + sp.product_desc + "</div>" +
+            "</div>" +
+            "<div style='background:#fff;border-radius:8px;padding:20px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>活动说明</h3>" +
+            "<div style='color:#666;line-height:1.8;font-size:14px'>" +
+            "<div>• 活动时间：" + sp.start_at + " - " + sp.end_at + "</div>" +
+            "<div>• 秒杀商品数量有限，先到先得</div>" +
+            "<div>• 每人限购 " + convert.toString(sp.limit_per_user) + " 件</div>" +
+            "<div>• 秒杀订单需在30分钟内完成支付</div>" +
+            "<div>• 秒杀商品不支持7天无理由退货（质量问题除外）</div>" +
+            "</div>" +
+            "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>" + productName + " - 限时秒杀</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Seckill buy (POST)
+    router_post(router, "/seckill/buy/:id", fn(req) {
+        let authResult = seckill_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let spId = convert.toInt(req.params.id)
+        let userId = req.currentUser.id
+
+        // Get seckill product with row lock (using transaction-like pattern)
+        let sp = db_queryOne(req.db, "SELECT * FROM seckill_products WHERE id = ? AND status = 'active'", [spId])
+        if (sp == null) {
+            return res_redirect("/seckill")
+        }
+
+        // Check stock
+        let stockLeft = sp.stock - sp.sold_count
+        if (stockLeft <= 0) {
+            return res_redirect("/seckill/product/" + convert.toString(spId) + "?error=soldout")
+        }
+
+        // Check user purchase limit
+        let userOrders = db_query(req.db, "SELECT COUNT(*) as cnt FROM seckill_orders WHERE user_id = ? AND seckill_product_id = ? AND status != 'cancelled'", [userId, spId])
+        let userBought = 0
+        if (arrays.length(userOrders) > 0 && userOrders[0].cnt != null) {
+            userBought = userOrders[0].cnt
+        }
+        if (userBought >= sp.limit_per_user) {
+            return res_redirect("/seckill/product/" + convert.toString(spId) + "?error=limit")
+        }
+
+        // Atomic stock decrement with condition (prevents overselling)
+        let updateResult = db_exec(req.db, "UPDATE seckill_products SET sold_count = sold_count + 1 WHERE id = ? AND sold_count < stock", [spId])
+
+        // Create order
+        let orderNo = "SK" + convert.toString(time.now()) + convert.toString(userId)
+        let totalPrice = sp.seckill_price * 1
+        db_exec(req.db, "INSERT INTO seckill_orders (user_id, activity_id, product_id, seckill_product_id, quantity, total_price, status, order_no, created_at) VALUES (?, ?, ?, ?, 1, ?, 'pending', ?, datetime('now'))", [userId, sp.activity_id, sp.product_id, spId, totalPrice, orderNo])
+
+        return res_redirect("/seckill/orders")
+    })
+
+    // My seckill orders
+    router_get(router, "/seckill/orders", fn(req) {
+        let authResult = seckill_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userId = req.currentUser.id
+        let orders = db_query(req.db, "SELECT so.*, p.name as product_name, a.name as activity_name FROM seckill_orders so LEFT JOIN products p ON so.product_id = p.id LEFT JOIN seckill_activities a ON so.activity_id = a.id WHERE so.user_id = ? ORDER BY so.id DESC LIMIT 50", [userId])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(orders)) {
+            let o = orders[i]
+            let productName = "商品"
+            if (o.product_name != null) { productName = o.product_name }
+
+            let statusText = "待支付"
+            let statusColor = "#fa8c16"
+            if (o.status == "paid") { statusText = "已支付"; statusColor = "#52c41a" }
+            if (o.status == "shipped") { statusText = "已发货"; statusColor = "#1890ff" }
+            if (o.status == "completed") { statusText = "已完成"; statusColor = "#52c41a" }
+            if (o.status == "cancelled") { statusText = "已取消"; statusColor = "#999" }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;padding:16px;margin-bottom:12px'>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #f0f0f0'>" +
+                "<span style='color:#999;font-size:13px'>订单号：" + o.order_no + "</span>" +
+                "<span style='color:" + statusColor + ";font-weight:bold'>" + statusText + "</span>" +
+                "</div>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center'>" +
+                "<div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + productName + "</div>" +
+                "<div style='color:#999;font-size:13px'>" + o.activity_name + "</div>" +
+                "</div>" +
+                "<div style='text-align:right'>" +
+                "<div style='color:#ff4400;font-size:20px;font-weight:bold'>¥" + convert.toString(o.total_price) + "</div>" +
+                "<div style='color:#999;font-size:12px;margin-top:4px'>x" + convert.toString(o.quantity) + "</div>" +
+                "</div>" +
+                "</div>" +
+                "<div style='margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center'>" +
+                "<span style='color:#999;font-size:12px'>下单时间：" + o.created_at + "</span>" +
+                "<div>" +
+                "<a href='/seckill/product/" + convert.toString(o.seckill_product_id) + "' style='color:#1890ff;text-decoration:none;font-size:14px;margin-right:16px'>查看商品</a>" +
+                "</div>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(orders) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无秒杀订单，快去抢购吧</div>"
+        }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<h1 style='margin:0;font-size:18px'>我的秒杀订单</h1>" +
+            "<a href='/seckill' style='color:#1890ff;text-decoration:none;font-size:14px'>继续抢购</a>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>我的秒杀订单</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}

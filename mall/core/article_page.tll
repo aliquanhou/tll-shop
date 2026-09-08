@@ -1,0 +1,161 @@
+// TLL Mall - Article & Announcement Page
+// All logic inline to avoid helper function bug
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn article_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn article_registerRoutes(router) {
+    // Article list
+    router_get(router, "/articles", fn(req) {
+        let category = req_getQuery(req, "category", "")
+        let sql = "SELECT * FROM articles WHERE status = 'published'"
+        let params = []
+        if (category != "") {
+            sql = sql + " AND category = ?"
+            arrays.push(params, category)
+        }
+        sql = sql + " ORDER BY sort_order ASC, id DESC LIMIT 50"
+        let articles = db_query(req.db, sql, params)
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(articles)) {
+            let a = articles[i]
+            listHtml = listHtml +
+                "<a href='/article/" + convert.toString(a.id) + "' style='text-decoration:none;color:inherit;display:block;padding:16px;background:#fff;margin-bottom:8px;border-radius:4px'>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>" +
+                "<span style='background:#e6f7ff;color:#1890ff;padding:2px 8px;border-radius:4px;font-size:12px'>" + a.category + "</span>" +
+                "<span style='color:#999;font-size:12px'>" + a.created_at + "</span>" +
+                "</div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + a.title + "</div>" +
+                "<div style='color:#666;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>" + a.content + "</div>" +
+                "<div style='margin-top:8px;color:#999;font-size:12px'>阅读：" + convert.toString(a.view_count) + "</div>" +
+                "</a>"
+            i = i + 1
+        }
+
+        if (arrays.length(articles) == 0) {
+            listHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff'>暂无文章</div>"
+        }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<h1 style='margin:0;font-size:18px'>文章资讯</h1>" +
+            "<a href='/announcements' style='color:#1890ff;text-decoration:none;font-size:14px'>公告中心</a>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>文章资讯</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Article detail
+    router_get(router, "/article/:id", fn(req) {
+        let id = convert.toInt(req.params.id)
+        let article = db_queryOne(req.db, "SELECT * FROM articles WHERE id = ? AND status = 'published'", [id])
+        if (article == null) {
+            return res_redirect("/articles")
+        }
+
+        // Increment view count
+        db_exec(req.db, "UPDATE articles SET view_count = view_count + 1 WHERE id = ?", [id])
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<a href='/articles' style='color:#1890ff;text-decoration:none;font-size:14px'>返回列表</a>" +
+            "<a href='/announcements' style='color:#1890ff;text-decoration:none;font-size:14px'>公告中心</a>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;background:#fff;padding:24px;border-radius:4px'>" +
+            "<h1 style='margin:0 0 8px 0;font-size:22px'>" + article.title + "</h1>" +
+            "<div style='display:flex;gap:16px;color:#999;font-size:13px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #f0f0f0'>" +
+            "<span>分类：" + article.category + "</span>" +
+            "<span>发布时间：" + article.created_at + "</span>" +
+            "<span>阅读：" + convert.toString(article.view_count + 1) + "</span>" +
+            "</div>" +
+            "<div style='line-height:1.8;color:#333;font-size:15px'>" + article.content + "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>" + article.title + "</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Announcement list
+    router_get(router, "/announcements", fn(req) {
+        let announcements = db_query(req.db, "SELECT * FROM announcements WHERE status = 'active' ORDER BY sort_order ASC, id DESC LIMIT 50", [])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(announcements)) {
+            let a = announcements[i]
+            let typeLabel = "通知"
+            if (a.type == "notice") { typeLabel = "通知" }
+            if (a.type == "activity") { typeLabel = "活动" }
+            if (a.type == "update") { typeLabel = "更新" }
+            if (a.type == "important") { typeLabel = "重要" }
+
+            listHtml = listHtml +
+                "<a href='/announcement/" + convert.toString(a.id) + "' style='text-decoration:none;color:inherit;display:block;padding:16px;background:#fff;margin-bottom:8px;border-radius:4px'>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>" +
+                "<span style='background:#fff7e6;color:#fa8c16;padding:2px 8px;border-radius:4px;font-size:12px'>" + typeLabel + "</span>" +
+                "<span style='color:#999;font-size:12px'>" + a.created_at + "</span>" +
+                "</div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + a.title + "</div>" +
+                "<div style='color:#666;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>" + a.content + "</div>" +
+                "</a>"
+            i = i + 1
+        }
+
+        if (arrays.length(announcements) == 0) {
+            listHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff'>暂无公告</div>"
+        }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<h1 style='margin:0;font-size:18px'>公告中心</h1>" +
+            "<a href='/articles' style='color:#1890ff;text-decoration:none;font-size:14px'>文章资讯</a>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto'>" + listHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>公告中心</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Announcement detail
+    router_get(router, "/announcement/:id", fn(req) {
+        let id = convert.toInt(req.params.id)
+        let announcement = db_queryOne(req.db, "SELECT * FROM announcements WHERE id = ? AND status = 'active'", [id])
+        if (announcement == null) {
+            return res_redirect("/announcements")
+        }
+
+        let typeLabel = "通知"
+        if (announcement.type == "notice") { typeLabel = "通知" }
+        if (announcement.type == "activity") { typeLabel = "活动" }
+        if (announcement.type == "update") { typeLabel = "更新" }
+        if (announcement.type == "important") { typeLabel = "重要" }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<a href='/announcements' style='color:#1890ff;text-decoration:none;font-size:14px'>返回列表</a>" +
+            "<a href='/articles' style='color:#1890ff;text-decoration:none;font-size:14px'>文章资讯</a>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;background:#fff;padding:24px;border-radius:4px'>" +
+            "<div style='display:flex;align-items:center;gap:8px;margin-bottom:8px'>" +
+            "<span style='background:#fff7e6;color:#fa8c16;padding:2px 8px;border-radius:4px;font-size:12px'>" + typeLabel + "</span>" +
+            "<span style='color:#999;font-size:13px'>" + announcement.created_at + "</span>" +
+            "</div>" +
+            "<h1 style='margin:0 0 16px 0;font-size:22px'>" + announcement.title + "</h1>" +
+            "<div style='line-height:1.8;color:#333;font-size:15px;padding-top:16px;border-top:1px solid #f0f0f0'>" + announcement.content + "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>" + announcement.title + "</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}

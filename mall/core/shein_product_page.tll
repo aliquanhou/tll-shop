@@ -1,0 +1,150 @@
+// TLL Mall - SHEIN Style Product Detail Page
+// All logic inline to ensure stability
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn shein_product_registerRoutes(router) {
+    // SHEIN style product detail
+    router_get(router, "/shein-product/:id", fn(req) {
+        let productId = convert.toInt(req.params.id)
+        let product = db_queryOne(req.db, "SELECT * FROM products WHERE id = ?", [productId])
+        if (product == null) {
+            return res_redirect("/products")
+        }
+
+        // Get SKUs
+        let skus = db_query(req.db, "SELECT * FROM product_skus WHERE product_id = ? ORDER BY id ASC", [productId])
+
+        // Get category
+        let category = db_queryOne(req.db, "SELECT * FROM categories WHERE id = ?", [product.category_id])
+        let categoryName = "精选好物"
+        if (category != null) { categoryName = category.name }
+
+        // Get related products
+        let related = db_query(req.db, "SELECT * FROM products WHERE category_id = ? AND id != ? AND status = 1 ORDER BY sales DESC LIMIT 6", [product.category_id, productId])
+
+        // Calculate discount
+        let originalPrice = product.price * 1.5
+        let discount = (product.price / originalPrice) * 10
+        let discountStr = convert.toString(discount)
+        if (discountStr.length > 3) { discountStr = discountStr[0] + discountStr[1] + discountStr[2] }
+
+        // Build gallery
+        let galleryHtml = ""
+        if (product.image != null && product.image != "") {
+            galleryHtml = "<img src='" + product.image + "' alt='" + product.name + "'>"
+        }
+        if (product.image == null || product.image == "") {
+            galleryHtml = "<div style='width:100%;height:100%;background:linear-gradient(135deg,#f5f7fa,#c3cfe2);display:flex;align-items:center;justify-content:center;font-size:80px'>📦</div>"
+        }
+
+        // Build SKU options
+        let skuHtml = ""
+        if (arrays.length(skus) > 0) {
+            skuHtml = "<div class='shein-detail-section'>" +
+                "<div class='shein-detail-section-title'>选择规格</div>" +
+                "<div style='display:flex;flex-wrap:wrap;gap:8px'>"
+            let si = 0
+            while (si < arrays.length(skus)) {
+                let sku = skus[si]
+                let skuName = sku.spec_name
+                if (skuName == null || skuName == "") { skuName = "规格" + convert.toString(si + 1) }
+                let activeClass = ""
+                if (si == 0) { activeClass = " style='border-color:#ff4400;color:#ff4400;background:#fff0f0'" }
+                skuHtml = skuHtml + "<div class='shein-sku-option'" + activeClass + ">" + skuName + "</div>"
+                si = si + 1
+            }
+            skuHtml = skuHtml + "</div></div>"
+        }
+
+        // Build related products
+        let relatedHtml = ""
+        if (arrays.length(related) > 0) {
+            relatedHtml = "<div class='shein-detail-section'>" +
+                "<div class='shein-detail-section-title'>猜你喜欢</div>" +
+                "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px'>"
+            let ri = 0
+            while (ri < arrays.length(related)) {
+                let rp = related[ri]
+                let rpImg = ""
+                if (rp.image != null && rp.image != "") {
+                    rpImg = "<img src='" + rp.image + "' style='width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px' alt='" + rp.name + "'>"
+                }
+                if (rp.image == null || rp.image == "") {
+                    rpImg = "<div style='width:100%;aspect-ratio:1;background:linear-gradient(135deg,#f5f7fa,#c3cfe2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px'>📦</div>"
+                }
+                relatedHtml = relatedHtml +
+                    "<a href='/shein-product/" + convert.toString(rp.id) + "' style='text-decoration:none;color:#333'>" +
+                    rpImg +
+                    "<div style='font-size:12px;color:#ff4400;font-weight:700;margin-top:4px'>¥" + convert.toString(rp.price) + "</div>" +
+                    "</a>"
+                ri = ri + 1
+            }
+            relatedHtml = relatedHtml + "</div></div>"
+        }
+
+        let body =
+            // Product Gallery
+            "<div class='shein-detail-gallery'>" + galleryHtml + "</div>" +
+
+            // Price Section
+            "<div class='shein-detail-price-section'>" +
+            "<div class='shein-detail-price'>" +
+            "<span class='shein-detail-price-now'><span class='shein-detail-price-symbol'>¥</span>" + convert.toString(product.price) + "</span>" +
+            "<span class='shein-detail-price-original'>¥" + convert.toString(originalPrice) + "</span>" +
+            "<span class='shein-detail-discount'>" + discountStr + "折</span>" +
+            "</div>" +
+            "<div class='shein-detail-title'>" + product.name + "</div>" +
+            "<div class='shein-detail-meta'>" +
+            "<span>月销 " + convert.toString(product.sales) + "+</span>" +
+            "<span>好评率 98%</span>" +
+            "<span>" + categoryName + "</span>" +
+            "</div>" +
+            "</div>" +
+
+            // SKU Selection
+            skuHtml +
+
+            // Delivery Info
+            "<div class='shein-detail-section'>" +
+            "<div class='shein-detail-section-title'>配送服务</div>" +
+            "<div style='font-size:13px;color:#666;line-height:2'>" +
+            "<div>🚚 预计 3-5 天送达</div>" +
+            "<div>📦 满 99 元包邮</div>" +
+            "<div>↩️ 7 天无理由退换</div>" +
+            "<div>✅ 正品保障 假一赔十</div>" +
+            "</div>" +
+            "</div>" +
+
+            // Product Description
+            "<div class='shein-detail-section'>" +
+            "<div class='shein-detail-section-title'>商品详情</div>" +
+            "<div style='font-size:13px;color:#666;line-height:1.8'>" +
+            (product.description != null ? product.description : "精选优质商品，品质保障，值得信赖。采用优质材料，做工精细，穿着舒适。时尚设计，百搭款式，是您衣橱必备单品。") +
+            "</div>" +
+            "</div>" +
+
+            // Related Products
+            relatedHtml +
+
+            // Bottom Bar
+            "<div class='shein-detail-bottom-bar'>" +
+            "<a href='#' class='shein-detail-action-icon'>" +
+            "<span>💬</span><span>客服</span>" +
+            "</a>" +
+            "<a href='#' class='shein-detail-action-icon'>" +
+            "<span>🤍</span><span>收藏</span>" +
+            "</a>" +
+            "<form method='POST' action='/cart/add/" + convert.toString(product.id) + "' style='flex:1'>" +
+            "<button type='submit' class='shein-detail-btn shein-detail-btn-cart'>加入购物车</button>" +
+            "</form>" +
+            "<form method='POST' action='/order/buy-now/" + convert.toString(product.id) + "' style='flex:1'>" +
+            "<button type='submit' class='shein-detail-btn shein-detail-btn-buy'>立即购买</button>" +
+            "</form>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>" + product.name + " - SHEIN Style</title><link rel='stylesheet' href='/static/css/shein-style.css'><style>.shein-sku-option{padding:8px 16px;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;background:#fff}</style></head><body style='padding-bottom:70px'>" + body + "</body></html>")
+    })
+}

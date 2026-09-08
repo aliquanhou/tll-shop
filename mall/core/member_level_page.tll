@@ -1,0 +1,202 @@
+// TLL Mall - Member Level Page
+// All logic inline to avoid helper function bug
+
+from "./database" import db_query, db_queryOne
+from "./router" import router_get, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn memberlevel_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn memberlevel_registerRoutes(router) {
+    // Member level list
+    router_get(router, "/member/levels", fn(req) {
+        let authResult = memberlevel_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let levels = db_query(req.db, "SELECT * FROM member_levels ORDER BY level ASC", [])
+        let userPoints = 0
+        let userLevel = db_queryOne(req.db, "SELECT * FROM member_levels WHERE min_points <= ? ORDER BY level DESC LIMIT 1", [userPoints])
+        if (userLevel == null) {
+            userLevel = db_queryOne(req.db, "SELECT * FROM member_levels ORDER BY level ASC LIMIT 1", [])
+        }
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(levels)) {
+            let l = levels[i]
+            let isCurrent = ""
+            if (userLevel != null && l.level == userLevel.level) {
+                isCurrent = "<span style='background:#52c41a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;margin-left:8px'>当前等级</span>"
+            }
+
+            let discountText = convert.toString(l.discount) + "折"
+            if (l.discount == 10) { discountText = "无折扣" }
+
+            listHtml = listHtml +
+                "<div style='padding:20px;background:#fff;margin-bottom:12px;border-radius:8px;border:1px solid #f0f0f0'>" +
+                "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px'>" +
+                "<div style='display:flex;align-items:center'>" +
+                "<span style='background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;margin-right:12px'>" + convert.toString(l.level) + "</span>" +
+                "<span style='font-size:18px;font-weight:bold'>" + l.name + "</span>" +
+                isCurrent +
+                "</div>" +
+                "<span style='color:#999;font-size:13px'>升级需 " + convert.toString(l.min_points) + " 积分</span>" +
+                "</div>" +
+                "<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px'>" +
+                "<div style='text-align:center;padding:12px;background:#f9f9f9;border-radius:4px'>" +
+                "<div style='font-size:20px;font-weight:bold;color:#ff4400'>" + discountText + "</div>" +
+                "<div style='font-size:12px;color:#999;margin-top:4px'>购物折扣</div>" +
+                "</div>" +
+                "<div style='text-align:center;padding:12px;background:#f9f9f9;border-radius:4px'>" +
+                "<div style='font-size:20px;font-weight:bold;color:#1890ff'>" + convert.toString(l.min_points) + "</div>" +
+                "<div style='font-size:12px;color:#999;margin-top:4px'>最低积分</div>" +
+                "</div>" +
+                "<div style='text-align:center;padding:12px;background:#f9f9f9;border-radius:4px'>" +
+                "<div style='font-size:20px;font-weight:bold;color:#52c41a'>" + convert.toString(l.level) + "</div>" +
+                "<div style='font-size:12px;color:#999;margin-top:4px'>等级序号</div>" +
+                "</div>" +
+                "</div>" +
+                "<div style='padding:12px;background:#fffbe6;border-radius:4px;font-size:13px;color:#666'>" +
+                "<strong>专属权益：</strong>" + l.benefits +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(levels) == 0) {
+            listHtml = "<div style='padding:40px;text-align:center;color:#999;background:#fff'>暂无会员等级</div>"
+        }
+
+        let currentLevelName = "普通会员"
+        let currentDiscount = "无折扣"
+        if (userLevel != null) {
+            currentLevelName = userLevel.name
+            currentDiscount = convert.toString(userLevel.discount) + "折"
+            if (userLevel.discount == 10) { currentDiscount = "无折扣" }
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:24px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<h1 style='margin:0 0 8px 0;font-size:24px'>会员中心</h1>" +
+            "<div style='display:flex;justify-content:space-between;align-items:center'>" +
+            "<div>" +
+            "<div style='font-size:16px;margin-bottom:4px'>当前等级：<strong>" + currentLevelName + "</strong></div>" +
+            "<div style='font-size:14px;opacity:0.9'>购物折扣：" + currentDiscount + "</div>" +
+            "</div>" +
+            "<div style='text-align:right'>" +
+            "<div style='font-size:24px;font-weight:bold'>" + convert.toString(userPoints) + "</div>" +
+            "<div style='font-size:12px;opacity:0.9'>我的积分</div>" +
+            "</div>" +
+            "</div>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<h2 style='font-size:18px;margin-bottom:12px'>全部会员等级</h2>" +
+            listHtml +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>会员中心</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // My member level detail
+    router_get(router, "/member/level", fn(req) {
+        let authResult = memberlevel_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userPoints = 0
+        let userLevel = db_queryOne(req.db, "SELECT * FROM member_levels WHERE min_points <= ? ORDER BY level DESC LIMIT 1", [userPoints])
+        if (userLevel == null) {
+            userLevel = db_queryOne(req.db, "SELECT * FROM member_levels ORDER BY level ASC LIMIT 1", [])
+        }
+
+        let nextLevel = null
+        if (userLevel != null) {
+            nextLevel = db_queryOne(req.db, "SELECT * FROM member_levels WHERE level > ? ORDER BY level ASC LIMIT 1", [userLevel.level])
+        }
+
+        let progressPercent = 0
+        let pointsToNext = 0
+        if (nextLevel != null && userLevel != null) {
+            pointsToNext = nextLevel.min_points - userPoints
+            let levelRange = nextLevel.min_points - userLevel.min_points
+            if (levelRange > 0) {
+                progressPercent = ((userPoints - userLevel.min_points) * 100) / levelRange
+            }
+        }
+
+        let currentLevelName = "普通会员"
+        let currentDiscount = "无折扣"
+        let currentBenefits = "暂无专属权益"
+        if (userLevel != null) {
+            currentLevelName = userLevel.name
+            currentDiscount = convert.toString(userLevel.discount) + "折"
+            if (userLevel.discount == 10) { currentDiscount = "无折扣" }
+            currentBenefits = userLevel.benefits
+        }
+
+        let nextLevelHtml = ""
+        if (nextLevel != null) {
+            nextLevelHtml =
+                "<div style='padding:20px;background:#fff;margin-bottom:16px;border-radius:8px'>" +
+                "<h3 style='margin:0 0 12px 0;font-size:16px'>下一等级：" + nextLevel.name + "</h3>" +
+                "<div style='margin-bottom:12px'>" +
+                "<div style='display:flex;justify-content:space-between;font-size:13px;color:#666;margin-bottom:4px'>" +
+                "<span>升级进度</span>" +
+                "<span>还需 " + convert.toString(pointsToNext) + " 积分</span>" +
+                "</div>" +
+                "<div style='height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden'>" +
+                "<div style='height:100%;background:linear-gradient(90deg,#667eea,#764ba2);width:" + convert.toString(progressPercent) + "%'></div>" +
+                "</div>" +
+                "</div>" +
+                "<div style='font-size:13px;color:#666'>升级后可享：" + nextLevel.benefits + "</div>" +
+                "</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:24px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<div style='display:flex;justify-content:space-between;align-items:center'>" +
+            "<div>" +
+            "<h1 style='margin:0 0 8px 0;font-size:24px'>" + currentLevelName + "</h1>" +
+            "<div style='font-size:14px;opacity:0.9'>购物折扣：" + currentDiscount + "</div>" +
+            "</div>" +
+            "<div style='text-align:right'>" +
+            "<div style='font-size:32px;font-weight:bold'>" + convert.toString(userPoints) + "</div>" +
+            "<div style='font-size:12px;opacity:0.9'>我的积分</div>" +
+            "</div>" +
+            "</div>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            nextLevelHtml +
+            "<div style='padding:20px;background:#fff;margin-bottom:16px;border-radius:8px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>当前等级权益</h3>" +
+            "<div style='padding:12px;background:#f6ffed;border-radius:4px;font-size:14px;color:#333'>" + currentBenefits + "</div>" +
+            "</div>" +
+            "<div style='padding:20px;background:#fff;margin-bottom:16px;border-radius:8px'>" +
+            "<h3 style='margin:0 0 12px 0;font-size:16px'>如何获取积分</h3>" +
+            "<div style='font-size:14px;color:#666;line-height:1.8'>" +
+            "<div>• 购物消费：每消费1元获得1积分</div>" +
+            "<div>• 每日签到：每日签到获得5积分</div>" +
+            "<div>• 评价商品：评价商品获得10积分</div>" +
+            "<div>• 邀请好友：邀请好友注册获得50积分</div>" +
+            "<div>• 完善资料：完善个人资料获得20积分</div>" +
+            "</div>" +
+            "</div>" +
+            "<div style='text-align:center;margin-bottom:16px'>" +
+            "<a href='/member/levels' style='color:#1890ff;text-decoration:none;font-size:14px'>查看全部会员等级 →</a>" +
+            "</div>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>我的会员等级</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}

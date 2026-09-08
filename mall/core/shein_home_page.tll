@@ -1,0 +1,161 @@
+// TLL Mall - SHEIN Style Home Page
+// All logic inline to ensure stability
+
+from "./database" import db_query, db_queryOne
+from "./router" import router_get, res_html, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn shein_home_registerRoutes(router) {
+    router_get(router, "/shein-home", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        let cartCount = 0
+        if (user != null) {
+            let cartResult = db_queryOne(req.db, "SELECT COUNT(*) as total FROM cart_items WHERE user_id = ?", [user.id])
+            if (cartResult != null) { cartCount = cartResult.total }
+        }
+
+        // Get categories
+        let categories = db_query(req.db, "SELECT * FROM categories WHERE status = 1 ORDER BY sort_order ASC, id DESC LIMIT 10", [])
+
+        // Get flash sale products
+        let flashProducts = db_query(req.db, "SELECT * FROM products WHERE status = 1 AND stock > 0 ORDER BY sales DESC LIMIT 6", [])
+
+        // Get all products for waterfall
+        let page = convert.toInt(req_getQuery(req, "page", "1"))
+        if (page < 1) { page = 1 }
+        let pageSize = 20
+        let offset = (page - 1) * pageSize
+        let products = db_query(req.db, "SELECT * FROM products WHERE status = 1 ORDER BY sort_order ASC, id DESC LIMIT ? OFFSET ?", [pageSize, offset])
+
+        // Build category icons
+        let categoryIcons = ["👗", "👕", "👖", "👟", "👜", "💄", "⌚", "🕶️", "🧥", "👚"]
+        let categoriesHtml = ""
+        let ci = 0
+        while (ci < arrays.length(categories)) {
+            let cat = categories[ci]
+            let icon = "📦"
+            if (ci < arrays.length(categoryIcons)) { icon = categoryIcons[ci] }
+            categoriesHtml = categoriesHtml +
+                "<a href='/category/" + convert.toString(cat.id) + "' class='shein-category-item'>" +
+                "<div class='shein-category-icon'>" + icon + "</div>" +
+                "<div class='shein-category-name'>" + cat.name + "</div>" +
+                "</a>"
+            ci = ci + 1
+        }
+
+        // Build flash sale items
+        let flashHtml = ""
+        let fi = 0
+        while (fi < arrays.length(flashProducts)) {
+            let fp = flashProducts[fi]
+            let imgHtml = ""
+            if (fp.image != null && fp.image != "") {
+                imgHtml = "<img src='" + fp.image + "' alt='" + fp.name + "'>"
+            }
+            if (fp.image == null || fp.image == "") {
+                imgHtml = "<div style='width:100%;height:100px;background:linear-gradient(135deg,#f5f7fa,#c3cfe2);display:flex;align-items:center;justify-content:center;font-size:32px'>📦</div>"
+            }
+            flashHtml = flashHtml +
+                "<a href='/product/" + convert.toString(fp.id) + "' class='shein-flash-item'>" +
+                imgHtml +
+                "<div class='shein-flash-item-info'>" +
+                "<div class='shein-flash-price'>¥" + convert.toString(fp.price) + "</div>" +
+                "</div>" +
+                "</a>"
+            fi = fi + 1
+        }
+
+        // Build product waterfall
+        let productsHtml = ""
+        let pi = 0
+        while (pi < arrays.length(products)) {
+            let p = products[pi]
+            let imgHtml = ""
+            if (p.image != null && p.image != "") {
+                imgHtml = "<img src='" + p.image + "' class='shein-product-image' alt='" + p.name + "'>"
+            }
+            if (p.image == null || p.image == "") {
+                imgHtml = "<div class='shein-product-image-placeholder'>📦</div>"
+            }
+
+            let tagHtml = ""
+            if (pi < 3) {
+                tagHtml = "<div class='shein-product-tag'>HOT</div>"
+            }
+
+            productsHtml = productsHtml +
+                "<a href='/product/" + convert.toString(p.id) + "' class='shein-product-card'>" +
+                tagHtml +
+                imgHtml +
+                "<div class='shein-product-info'>" +
+                "<div class='shein-product-title'>" + p.name + "</div>" +
+                "<div class='shein-product-price-row'>" +
+                "<span class='shein-product-price'><span class='shein-product-price-symbol'>¥</span>" + convert.toString(p.price) + "</span>" +
+                "</div>" +
+                "<div class='shein-product-meta'>" +
+                "<span class='shein-product-sales'>已售" + convert.toString(p.sales) + "</span>" +
+                "<span class='shein-product-fav'>🤍</span>" +
+                "</div>" +
+                "</div>" +
+                "</a>"
+            pi = pi + 1
+        }
+
+        let body =
+            // Header
+            "<div class='shein-header'>" +
+            "<div class='shein-logo'>SHEIN</div>" +
+            "<div class='shein-search'>" +
+            "<span class='shein-search-icon'>🔍</span>" +
+            "<input type='text' placeholder='搜索商品' readonly>" +
+            "</div>" +
+            "</div>" +
+
+            // Categories
+            "<div class='shein-categories'>" + categoriesHtml + "</div>" +
+
+            // Banner
+            "<div class='shein-banner'>" +
+            "<div class='shein-banner-placeholder'>🔥 限时特惠 低至3折</div>" +
+            "</div>" +
+
+            // Flash Sale
+            "<div class='shein-section shein-flash-sale'>" +
+            "<div class='shein-section-header'>" +
+            "<div class='shein-section-title'>⚡ 限时秒杀</div>" +
+            "<a href='/products?sort=sales' class='shein-section-more'>更多 ›</a>" +
+            "</div>" +
+            "<div class='shein-flash-items'>" + flashHtml + "</div>" +
+            "</div>" +
+
+            // Product Waterfall
+            "<div style='padding:12px 12px 4px'>" +
+            "<div style='font-size:16px;font-weight:700;color:#000;margin-bottom:10px'>为你推荐</div>" +
+            "</div>" +
+            "<div class='shein-product-grid'>" + productsHtml + "</div>" +
+
+            // Bottom Tab Bar
+            "<div class='shein-tabbar'>" +
+            "<a href='/shein-home' class='shein-tab-item active'>" +
+            "<span class='shein-tab-icon'>🏠</span>" +
+            "<span class='shein-tab-label'>首页</span>" +
+            "</a>" +
+            "<a href='/categories' class='shein-tab-item'>" +
+            "<span class='shein-tab-icon'>📋</span>" +
+            "<span class='shein-tab-label'>分类</span>" +
+            "</a>" +
+            "<a href='/cart' class='shein-tab-item' style='position:relative'>" +
+            "<span class='shein-tab-icon'>🛒</span>" +
+            "<span class='shein-tab-label'>购物车</span>" +
+            (cartCount > 0 ? "<span class='shein-tab-cart-badge'>" + convert.toString(cartCount) + "</span>" : "") +
+            "</a>" +
+            "<a href='/user-center' class='shein-tab-item'>" +
+            "<span class='shein-tab-icon'>👤</span>" +
+            "<span class='shein-tab-label'>我的</span>" +
+            "</a>" +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>SHEIN Style - 首页</title><link rel='stylesheet' href='/static/css/shein-style.css'></head><body>" + body + "</body></html>")
+    })
+}

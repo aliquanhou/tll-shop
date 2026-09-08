@@ -1,0 +1,130 @@
+// TLL Mall - Coupon Page (Minimal Version)
+// All logic inline to ensure stability
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn coupon_registerRoutes(router) {
+    // Coupon center (领券中心)
+    router_get(router, "/coupons", fn(req) {
+        let coupons = db_query(req.db, "SELECT * FROM coupons WHERE status = 'active' ORDER BY id DESC LIMIT 20", [])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(coupons)) {
+            let c = coupons[i]
+            let couponValue = ""
+            if (c.type == "discount") {
+                couponValue = convert.toString(c.value) + "折"
+            }
+            if (c.type == "cash") {
+                couponValue = "¥" + convert.toString(c.value)
+            }
+            if (c.type == "shipping") {
+                couponValue = "包邮"
+            }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;overflow:hidden;margin-bottom:12px;display:flex'>" +
+                "<div style='width:120px;background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0'>" +
+                "<div style='font-size:28px;font-weight:bold'>" + couponValue + "</div>" +
+                "<div style='font-size:12px;opacity:0.9;margin-top:4px'>满" + convert.toString(c.min_amount) + "可用</div>" +
+                "</div>" +
+                "<div style='flex:1;padding:16px;display:flex;flex-direction:column;justify-content:space-between'>" +
+                "<div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + c.name + "</div>" +
+                "<div style='font-size:13px;color:#666'>有效期：" + c.start_at + " 至 " + c.end_at + "</div>" +
+                "</div>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(coupons) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无可领取的优惠券</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<h1 style='margin:0 0 4px 0;font-size:28px'>🎫 领券中心</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>超值优惠券，限时领取</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            "<div style='display:flex;gap:12px;margin-bottom:16px'>" +
+            "<a href='/coupons' style='flex:1;text-align:center;padding:10px;background:#ff4400;color:#fff;border-radius:4px;text-decoration:none;font-size:14px;font-weight:bold'>领券中心</a>" +
+            "<a href='/my/coupons' style='flex:1;text-align:center;padding:10px;background:#fff;color:#333;border-radius:4px;text-decoration:none;font-size:14px;border:1px solid #ddd'>我的优惠券</a>" +
+            "</div>" +
+            listHtml +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>领券中心</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // My coupons (我的优惠券)
+    router_get(router, "/my/coupons", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        if (user == null) {
+            return res_redirect("/login")
+        }
+
+        let userId = user.id
+        let coupons = db_query(req.db, "SELECT uc.*, c.name, c.type, c.value, c.min_amount, c.start_at, c.end_at FROM user_coupons uc LEFT JOIN coupons c ON uc.coupon_id = c.id WHERE uc.user_id = ? ORDER BY uc.id DESC LIMIT 50", [userId])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(coupons)) {
+            let c = coupons[i]
+            let couponValue = ""
+            if (c.type == "discount") {
+                couponValue = convert.toString(c.value) + "折"
+            }
+            if (c.type == "cash") {
+                couponValue = "¥" + convert.toString(c.value)
+            }
+            if (c.type == "shipping") {
+                couponValue = "包邮"
+            }
+
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;overflow:hidden;margin-bottom:12px;display:flex'>" +
+                "<div style='width:120px;background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0'>" +
+                "<div style='font-size:28px;font-weight:bold'>" + couponValue + "</div>" +
+                "<div style='font-size:12px;opacity:0.9;margin-top:4px'>满" + convert.toString(c.min_amount) + "可用</div>" +
+                "</div>" +
+                "<div style='flex:1;padding:16px;display:flex;flex-direction:column;justify-content:space-between'>" +
+                "<div>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + c.name + "</div>" +
+                "<div style='font-size:13px;color:#666'>有效期：" + c.start_at + " 至 " + c.end_at + "</div>" +
+                "<div style='font-size:12px;color:#999;margin-top:4px'>状态：" + c.status + "</div>" +
+                "</div>" +
+                "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(coupons) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无优惠券</div>"
+        }
+
+        let body =
+            "<div style='background:linear-gradient(135deg,#ff4400,#ff6b6b);color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<h1 style='margin:0 0 4px 0;font-size:28px'>🎫 我的优惠券</h1>" +
+            "<p style='margin:0;font-size:14px;opacity:0.9'>查看和管理我的优惠券</p>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            "<div style='display:flex;gap:12px;margin-bottom:16px'>" +
+            "<a href='/coupons' style='flex:1;text-align:center;padding:10px;background:#fff;color:#333;border-radius:4px;text-decoration:none;font-size:14px;border:1px solid #ddd'>领券中心</a>" +
+            "<a href='/my/coupons' style='flex:1;text-align:center;padding:10px;background:#ff4400;color:#fff;border-radius:4px;text-decoration:none;font-size:14px;font-weight:bold'>我的优惠券</a>" +
+            "</div>" +
+            listHtml +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>我的优惠券</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}
