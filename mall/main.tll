@@ -21,6 +21,7 @@ from "./core/collection_page" import collection_registerRoutes
 from "./core/review_page" import review_registerRoutes
 from "./core/logistics_page" import logistics_registerRoutes
 from "./core/aftersale_page_v4" import aftersale_registerRoutes
+from "./core/brand_page" import brand_registerRoutes
 from "./core/article_page" import article_registerRoutes
 from "./core/member_level_page" import memberlevel_registerRoutes
 from "./core/realname_page" import realname_registerRoutes
@@ -706,6 +707,7 @@ collection_registerRoutes(mallRouter)
 review_registerRoutes(mallRouter)
 logistics_registerRoutes(mallRouter)
 aftersale_registerRoutes(mallRouter)
+brand_registerRoutes(mallRouter)
 article_registerRoutes(mallRouter)
 memberlevel_registerRoutes(mallRouter)
 realname_registerRoutes(mallRouter)
