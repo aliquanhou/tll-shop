@@ -1,0 +1,50 @@
+// TLL Mall - Notification Page (Simple Version)
+// All logic inline to ensure stability
+
+from "./database" import db_query, db_exec
+from "./router" import router_get, res_html, res_redirect, req_getQuery
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn notification_registerRoutes(router) {
+    router_get(router, "/notifications", fn(req) {
+        let sessionId = cookie_getSessionId(req)
+        let user = auth_currentUser(sessionId)
+        if (user == null) {
+            return res_redirect("/login")
+        }
+
+        let userId = user.id
+        let notifications = db_query(req.db, "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20", [userId])
+
+        db_exec(req.db, "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0", [userId])
+
+        let listHtml = ""
+        let i = 0
+        while (i < arrays.length(notifications)) {
+            let n = notifications[i]
+            listHtml = listHtml +
+                "<div style='background:#fff;border-radius:8px;padding:16px;margin-bottom:12px'>" +
+                "<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>" + n.title + "</div>" +
+                "<div style='font-size:14px;color:#666;margin-bottom:4px'>" + n.content + "</div>" +
+                "<div style='font-size:12px;color:#999'>" + n.created_at + "</div>" +
+                "</div>"
+            i = i + 1
+        }
+
+        if (arrays.length(notifications) == 0) {
+            listHtml = "<div style='padding:60px;text-align:center;color:#999;background:#fff;border-radius:8px'>暂无通知</div>"
+        }
+
+        let body =
+            "<div style='background:#1890ff;color:#fff;padding:20px;margin-bottom:16px'>" +
+            "<div style='max-width:800px;margin:0 auto'>" +
+            "<h1 style='margin:0;font-size:28px'>消息通知</h1>" +
+            "</div>" +
+            "</div>" +
+            "<div style='max-width:800px;margin:0 auto;padding:0 16px'>" +
+            listHtml +
+            "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>消息通知</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+}

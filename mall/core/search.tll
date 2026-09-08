@@ -59,9 +59,9 @@ fn search_highlight(text, keyword) {
     }
     // Simple highlight: wrap with markers
     let before = strings.substring(text, 0, index)
-    let match = strings.substring(text, index, index + strings.length(keyword))
+    let matched = strings.substring(text, index, index + strings.length(keyword))
     let after = strings.substring(text, index + strings.length(keyword), strings.length(text))
-    return before + "[HIGHLIGHT]" + match + "[/HIGHLIGHT]" + after
+    return before + "[HIGHLIGHT]" + matched + "[/HIGHLIGHT]" + after
 }
 
 fn search_recordHistory(db, userId, keyword) {

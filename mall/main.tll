@@ -16,10 +16,23 @@ from "./core/admin_new_modules" import new_modules_registerAll
 from "./core/admin_missing_pages" import admin_missing_registerAll
 from "./core/admin_api" import api_registerAll
 from "./core/admin_dashboard" import dashboard_registerRoutes
-from "./core/notification_page" import notification_registerRoutes
+from "./core/notification_page_v3" import notification_registerRoutes
 from "./core/collection_page" import collection_registerRoutes
 from "./core/review_page" import review_registerRoutes
 from "./core/logistics_page" import logistics_registerRoutes
+from "./core/aftersale_page_v4" import aftersale_registerRoutes
+from "./core/brand_page" import brand_registerRoutes
+from "./core/points_mall_page" import points_mall_registerRoutes
+from "./core/shein_home_page" import shein_home_registerRoutes
+from "./core/shein_product_page" import shein_product_registerRoutes
+from "./core/shein_cart_page" import shein_cart_registerRoutes
+from "./core/shein_user_page" import shein_user_registerRoutes
+from "./core/article_page" import article_registerRoutes
+from "./core/member_level_page" import memberlevel_registerRoutes
+from "./core/realname_page" import realname_registerRoutes
+from "./core/seckill_page" import seckill_registerRoutes
+from "./core/group_buy_page" import groupbuy_registerRoutes
+from "./core/coupon_page" import coupon_registerRoutes
 from "./core/payment" import payment_registerAll, payment_initTables
 from "./core/icp" import icp_registerAll, icp_initTables
 from "./core/agreement" import agreement_registerAll, agreement_initTables
@@ -698,6 +711,19 @@ notification_registerRoutes(mallRouter)
 collection_registerRoutes(mallRouter)
 review_registerRoutes(mallRouter)
 logistics_registerRoutes(mallRouter)
+aftersale_registerRoutes(mallRouter)
+brand_registerRoutes(mallRouter)
+points_mall_registerRoutes(mallRouter)
+shein_home_registerRoutes(mallRouter)
+shein_product_registerRoutes(mallRouter)
+shein_cart_registerRoutes(mallRouter)
+shein_user_registerRoutes(mallRouter)
+article_registerRoutes(mallRouter)
+memberlevel_registerRoutes(mallRouter)
+realname_registerRoutes(mallRouter)
+seckill_registerRoutes(mallRouter)
+groupbuy_registerRoutes(mallRouter)
+coupon_registerRoutes(mallRouter)
 payment_registerAll(mallRouter)
 icp_registerAll(mallRouter)
 agreement_registerAll(mallRouter)

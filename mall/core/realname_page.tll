@@ -1,0 +1,173 @@
+// TLL Mall - Realname Authentication Page
+// All logic inline to avoid helper function bug
+
+from "./database" import db_query, db_queryOne, db_exec
+from "./router" import router_get, router_post, res_html, res_redirect, req_getQuery, req_getBody
+from "./auth" import auth_currentUser, cookie_getSessionId
+
+fn realname_checkAuth(req) {
+    let sessionId = cookie_getSessionId(req)
+    let user = auth_currentUser(sessionId)
+    if (user == null) {
+        return res_redirect("/login")
+    }
+    req.currentUser = user
+    return null
+}
+
+fn realname_registerRoutes(router) {
+    // Realname auth status page
+    router_get(router, "/realname", fn(req) {
+        let authResult = realname_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userId = req.currentUser.id
+        let record = db_queryOne(req.db, "SELECT * FROM realname_auth WHERE user_id = ? ORDER BY id DESC LIMIT 1", [userId])
+
+        let statusText = "未认证"
+        let statusColor = "#999"
+        let statusBg = "#f0f0f0"
+        if (record != null) {
+            if (record.status == "pending") {
+                statusText = "审核中"
+                statusColor = "#fa8c16"
+                statusBg = "#fff7e6"
+            }
+            if (record.status == "approved") {
+                statusText = "已认证"
+                statusColor = "#52c41a"
+                statusBg = "#f6ffed"
+            }
+            if (record.status == "rejected") {
+                statusText = "已拒绝"
+                statusColor = "#ff4d4f"
+                statusBg = "#fff1f0"
+            }
+        }
+
+        let contentHtml = ""
+        if (record == null) {
+            // Not submitted - show form
+            contentHtml =
+                "<div style='padding:24px;background:#fff;border-radius:8px'>" +
+                "<h2 style='margin:0 0 16px 0;font-size:18px'>实名认证</h2>" +
+                "<div style='padding:12px;background:#e6f7ff;border-radius:4px;margin-bottom:20px;font-size:13px;color:#1890ff'>" +
+                "完成实名认证后可享受更多服务，包括提现、开店、购买特定商品等。" +
+                "</div>" +
+                "<form method='POST' action='/realname/submit'>" +
+                "<div style='margin-bottom:16px'>" +
+                "<label style='display:block;margin-bottom:6px;font-weight:500'>真实姓名</label>" +
+                "<input type='text' name='real_name' required style='width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px' placeholder='请输入真实姓名'>" +
+                "</div>" +
+                "<div style='margin-bottom:20px'>" +
+                "<label style='display:block;margin-bottom:6px;font-weight:500'>身份证号</label>" +
+                "<input type='text' name='id_card' required style='width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px' placeholder='请输入18位身份证号'>" +
+                "</div>" +
+                "<button type='submit' style='width:100%;padding:12px;background:#1890ff;color:#fff;border:none;border-radius:4px;font-size:16px;cursor:pointer'>提交认证</button>" +
+                "</form>" +
+                "</div>"
+        } else {
+            // Submitted - show status
+            let realName = record.real_name
+            let idCard = record.id_card
+            // Mask ID card
+            let maskedIdCard = idCard
+            if (idCard != null && arrays.length(idCard) >= 10) {
+                maskedIdCard = arrays.slice(idCard, 0, 4) + "**********" + arrays.slice(idCard, arrays.length(idCard) - 4, arrays.length(idCard))
+            }
+
+            let rejectReasonHtml = ""
+            if (record.status == "rejected" && record.reject_reason != null) {
+                rejectReasonHtml =
+                    "<div style='padding:12px;background:#fff1f0;border-radius:4px;margin-bottom:16px;font-size:13px;color:#ff4d4f'>" +
+                    "<strong>拒绝原因：</strong>" + record.reject_reason +
+                    "</div>"
+            }
+
+            let resubmitHtml = ""
+            if (record.status == "rejected") {
+                resubmitHtml =
+                    "<div style='margin-top:20px;padding-top:20px;border-top:1px solid #f0f0f0'>" +
+                    "<h3 style='margin:0 0 12px 0;font-size:16px'>重新提交认证</h3>" +
+                    "<form method='POST' action='/realname/submit'>" +
+                    "<div style='margin-bottom:12px'>" +
+                    "<label style='display:block;margin-bottom:6px;font-weight:500'>真实姓名</label>" +
+                    "<input type='text' name='real_name' required style='width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px' value='" + realName + "'>" +
+                    "</div>" +
+                    "<div style='margin-bottom:16px'>" +
+                    "<label style='display:block;margin-bottom:6px;font-weight:500'>身份证号</label>" +
+                    "<input type='text' name='id_card' required style='width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px' value='" + idCard + "'>" +
+                    "</div>" +
+                    "<button type='submit' style='width:100%;padding:12px;background:#1890ff;color:#fff;border:none;border-radius:4px;font-size:16px;cursor:pointer'>重新提交</button>" +
+                    "</form>" +
+                    "</div>"
+            }
+
+            contentHtml =
+                "<div style='padding:24px;background:#fff;border-radius:8px'>" +
+                "<div style='text-align:center;margin-bottom:24px'>" +
+                "<div style='display:inline-block;padding:8px 20px;background:" + statusBg + ";color:" + statusColor + ";border-radius:20px;font-size:16px;font-weight:bold'>" + statusText + "</div>" +
+                "</div>" +
+                "<div style='margin-bottom:16px;padding:12px;background:#f9f9f9;border-radius:4px'>" +
+                "<div style='display:flex;justify-content:space-between;margin-bottom:8px'>" +
+                "<span style='color:#666'>真实姓名</span>" +
+                "<span style='font-weight:500'>" + realName + "</span>" +
+                "</div>" +
+                "<div style='display:flex;justify-content:space-between;margin-bottom:8px'>" +
+                "<span style='color:#666'>身份证号</span>" +
+                "<span style='font-weight:500'>" + maskedIdCard + "</span>" +
+                "</div>" +
+                "<div style='display:flex;justify-content:space-between;margin-bottom:8px'>" +
+                "<span style='color:#666'>提交时间</span>" +
+                "<span style='font-weight:500'>" + record.created_at + "</span>" +
+                "</div>"
+            if (record.approved_at != null) {
+                contentHtml = contentHtml +
+                    "<div style='display:flex;justify-content:space-between'>" +
+                    "<span style='color:#666'>审核通过时间</span>" +
+                    "<span style='font-weight:500'>" + record.approved_at + "</span>" +
+                    "</div>"
+            }
+            contentHtml = contentHtml +
+                "</div>" +
+                rejectReasonHtml +
+                resubmitHtml +
+                "</div>"
+        }
+
+        let body =
+            "<div style='padding:16px;background:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>" +
+            "<h1 style='margin:0;font-size:18px'>实名认证</h1>" +
+            "<a href='/user' style='color:#1890ff;text-decoration:none;font-size:14px'>返回用户中心</a>" +
+            "</div>" +
+            "<div style='max-width:500px;margin:0 auto'>" + contentHtml + "</div>"
+
+        return res_html("<html><head><meta charset='utf-8'><title>实名认证</title></head><body style='margin:0;background:#f5f5f5;font-family:sans-serif'>" + body + "</body></html>")
+    })
+
+    // Submit realname auth
+    router_post(router, "/realname/submit", fn(req) {
+        let authResult = realname_checkAuth(req)
+        if (authResult != null) { return authResult }
+
+        let userId = req.currentUser.id
+        let body = req_getBody(req)
+        let realName = body["real_name"]
+        let idCard = body["id_card"]
+
+        if (realName == null || realName == "" || idCard == null || idCard == "") {
+            return res_redirect("/realname")
+        }
+
+        // Check if there's a pending record
+        let existing = db_queryOne(req.db, "SELECT * FROM realname_auth WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", [userId])
+        if (existing != null) {
+            return res_redirect("/realname")
+        }
+
+        // Insert new record
+        db_exec(req.db, "INSERT INTO realname_auth (user_id, real_name, id_card, status, created_at) VALUES (?, ?, ?, 'pending', datetime('now'))", [userId, realName, idCard])
+
+        return res_redirect("/realname")
+    })
+}
